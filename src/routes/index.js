@@ -4,6 +4,7 @@ const vudyRoutes = require('./vudy.routes');
 const docusealRoutes = require('./docuseal.routes');
 const bridgeRoutes = require('./bridge.routes');
 const customRoutes = require('./custom.routes');
+const companyRoutes = require('./company.routes');
 
 const router = express.Router();
 
@@ -13,6 +14,7 @@ router.use('/vudy', vudyRoutes);
 router.use('/docuseal', docusealRoutes);
 router.use('/bridge', bridgeRoutes);
 router.use('/custom', customRoutes);
+router.use('/company', companyRoutes);
 
 // Root API endpoint
 router.get('/', (req, res) => {
@@ -25,6 +27,7 @@ router.get('/', (req, res) => {
       docuseal: '/api/docuseal',
       bridge: '/api/bridge',
       custom: '/api/custom',
+      company: '/api/company',
     },
   });
 });
