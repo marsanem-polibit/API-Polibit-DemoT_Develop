@@ -226,6 +226,85 @@ const rateLimit = (options = {}) => {
   };
 };
 
+/**
+ * API Key only authentication middleware
+ * Requires valid x-api-key header (does not accept Bearer token)
+ */
+const requireApiKey = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+
+  // Check if API key is provided
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'API key required',
+      message: 'Please provide x-api-key header',
+    });
+  }
+
+  // Verify API key
+  if (!verifyApiKey(apiKey)) {
+    return res.status(401).json({
+      error: 'Invalid API key',
+      message: 'Please provide a valid x-api-key',
+    });
+  }
+
+  req.auth = {
+    authenticated: true,
+    method: 'apikey',
+  };
+
+  return next();
+};
+
+/**
+ * Bearer Token only authentication middleware
+ * Requires valid Bearer token (does not accept x-api-key)
+ */
+const requireBearerToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  // Check if authorization header is provided
+  if (!authHeader) {
+    return res.status(401).json({
+      error: 'Bearer token required',
+      message: 'Please provide Authorization header with Bearer token',
+    });
+  }
+
+  const parts = authHeader.split(' ');
+
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    return res.status(401).json({
+      error: 'Invalid authorization header',
+      message: 'Format should be: Authorization: Bearer <token>',
+    });
+  }
+
+  const token = parts[1];
+
+  // Verify JWT token
+  const decoded = verifyJWT(token);
+
+  if (!decoded) {
+    return res.status(401).json({
+      error: 'Invalid or expired token',
+      message: 'Please provide a valid authentication token',
+    });
+  }
+
+  // Attach user info to request
+  req.user = decoded;
+  req.auth = {
+    ...req.auth,
+    authenticated: true,
+    method: 'bearer',
+    userId: decoded.userId || decoded.id || decoded.sub,
+  };
+
+  return next();
+};
+
 module.exports = {
   authenticate,
   requireRole,
@@ -234,4 +313,6 @@ module.exports = {
   rateLimit,
   verifyJWT,
   verifyApiKey,
+  requireApiKey,
+  requireBearerToken,
 };

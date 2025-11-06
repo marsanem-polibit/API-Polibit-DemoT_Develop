@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { Web3 } = require('web3');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireApiKey, requireBearerToken } = require('../middleware/auth');
 const {
   catchAsync,
   validate
@@ -2328,6 +2328,496 @@ router.post('/contract/set-allowance', authenticate, catchAsync(async (req, res)
       success: false,
       error: 'Transaction failed',
       message: error.message || 'Failed to set allowance'
+    });
+  }
+}));
+
+/**
+ * @route   GET /api/blockchain/contract/allowance
+ * @desc    Get the allowance amount for a spender on behalf of an owner
+ * @access  Private (requires Bearer token)
+ * @query   contractAddress - The contract address
+ * @query   owner - The owner address
+ * @query   spender - The spender address
+ */
+router.get('/contract/allowance', requireBearerToken, catchAsync(async (req, res) => {
+  const { contractAddress, owner, spender } = req.query;
+
+  // Validate required fields
+  validate(contractAddress, 'Contract address is required');
+  validate(owner, 'Owner address is required');
+  validate(spender, 'Spender address is required');
+
+  // Get RPC URL from environment variables
+  const rpcURL = process.env.RPC_URL;
+
+  if (!rpcURL) {
+    return res.status(500).json({
+      success: false,
+      error: 'Configuration error',
+      message: 'RPC_URL not configured in environment variables'
+    });
+  }
+
+  // Initialize Web3 with the RPC URL
+  const web3 = new Web3(rpcURL);
+
+  // Validate address formats
+  if (!web3.utils.isAddress(contractAddress)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid contract address'
+    });
+  }
+
+  if (!web3.utils.isAddress(owner)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid owner address'
+    });
+  }
+
+  if (!web3.utils.isAddress(spender)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid spender address'
+    });
+  }
+
+  // Contract ABI for the allowance function (ERC20 standard)
+  const contractAbi = [{
+    'inputs': [
+      {
+        'name': 'owner',
+        'type': 'address'
+      },
+      {
+        'name': 'spender',
+        'type': 'address'
+      }
+    ],
+    'name': 'allowance',
+    'outputs': [{
+      'name': '',
+      'type': 'uint256'
+    }],
+    'stateMutability': 'view',
+    'type': 'function'
+  }];
+
+  try {
+    // Create contract instance
+    const contract = new web3.eth.Contract(contractAbi, contractAddress);
+
+    // Call the allowance function (read-only, no transaction needed)
+    const allowanceAmount = await contract.methods.allowance(owner, spender).call();
+
+    res.status(200).json({
+      success: true,
+      message: 'Allowance retrieved successfully',
+      data: {
+        contractAddress: contractAddress.toLowerCase(),
+        owner: owner.toLowerCase(),
+        spender: spender.toLowerCase(),
+        allowance: allowanceAmount.toString(),
+        network: 'Polygon Amoy'
+      }
+    });
+
+  } catch (error) {
+    // Handle specific Web3 errors
+    if (error.message && error.message.includes('revert')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Contract call reverted',
+        message: 'Contract call reverted. The contract may not support the allowance function.'
+      });
+    }
+
+    // Generic error handling
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get allowance',
+      message: error.message || 'Failed to retrieve allowance'
+    });
+  }
+}));
+
+/**
+ * @route   POST /api/blockchain/contract/batch-transfer-tokens
+ * @desc    Batch transfer tokens to multiple addresses
+ * @access  Private (requires Bearer token)
+ * @body    { contractAddress: string, addresses: string[], amounts: number[] }
+ */
+router.post('/contract/batch-transfer-tokens', authenticate, catchAsync(async (req, res) => {
+  const { contractAddress, addressList, amountsList } = req.body;
+
+  // Validate required fields
+  validate(contractAddress, 'Contract address is required');
+  validate(addressList, 'Address list array is required');
+  validate(amountsList, 'Amounts list array is required');
+
+  // Validate addresses is an array
+  if (!Array.isArray(addressList) || amountsList.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid addresses',
+      message: 'Address list must be a non-empty array'
+    });
+  }
+
+  // Validate amounts is an array
+  if (!Array.isArray(amountsList) || amountsList.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid amounts',
+      message: 'Amounts list must be a non-empty array'
+    });
+  }
+
+  // Validate that addresses and amounts arrays have the same length
+  if (addressList.length !== amountsList.length) {
+    return res.status(400).json({
+      success: false,
+      error: 'Array length mismatch',
+      message: 'Address list and amounts list must have the same length'
+    });
+  }
+
+  // Get RPC URL and Private Key from environment variables
+  const rpcURL = process.env.RPC_URL;
+  const privateKey = process.env.PORTAL_HQ_PRIVATE_KEY;
+
+  if (!rpcURL) {
+    return res.status(500).json({
+      success: false,
+      error: 'Configuration error',
+      message: 'RPC_URL not configured in environment variables'
+    });
+  }
+
+  if (!privateKey) {
+    return res.status(500).json({
+      success: false,
+      error: 'Configuration error',
+      message: 'PORTAL_HQ_PRIVATE_KEY not configured in environment variables'
+    });
+  }
+
+  // Initialize Web3 with the RPC URL
+  const web3 = new Web3(rpcURL);
+
+  // Validate contract address format
+  if (!web3.utils.isAddress(contractAddress)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid contract address'
+    });
+  }
+
+  // Validate all recipient addressList
+  for (let i = 0; i < addressList.length; i++) {
+    if (!web3.utils.isAddress(addressList[i])) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid address',
+        message: `Invalid recipient address at index ${i}: ${addressList[i]}`
+      });
+    }
+  }
+
+  // Validate all amountsList are positive numbers
+  for (let i = 0; i < amountsList.length; i++) {
+    if (typeof amountsList[i] !== 'number' || amountsList[i] <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid amount',
+        message: `Amount at index ${i} must be a positive number`
+      });
+    }
+  }
+
+  // Contract ABI for the batchTransfer function
+  const contractAbi = [{
+    'inputs': [
+      {
+        'internalType': 'address[]',
+        'name': 'to',
+        'type': 'address[]'
+      },
+      {
+        'internalType': 'uint256[]',
+        'name': 'amounts',
+        'type': 'uint256[]'
+      }
+    ],
+    'name': 'batchTransfer',
+    'outputs': [],
+    'stateMutability': 'nonpayable',
+    'type': 'function'
+  }];
+
+  try {
+    // Create contract instance
+    const contract = new web3.eth.Contract(contractAbi, contractAddress);
+
+    // Create account from private key (ensure it has 0x prefix)
+    const formattedPrivateKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+    const account = web3.eth.accounts.privateKeyToAccount(formattedPrivateKey);
+    web3.eth.accounts.wallet.add(account);
+
+    // Get current nonce
+    const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
+
+    // Get current gas price
+    const gasPrice = await web3.eth.getGasPrice();
+
+    // Prepare transaction
+    const tx = {
+      from: account.address,
+      to: contractAddress,
+      gas: 300000,
+      gasPrice: gasPrice,
+      nonce: nonce,
+      data: contract.methods.batchTransfer(addressList, amountsList).encodeABI(),
+      chainId: 80002 // Polygon Amoy testnet
+    };
+
+    // Sign and send transaction
+    const signedTx = await web3.eth.accounts.signTransaction(tx, formattedPrivateKey);
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    res.status(200).json({
+      success: true,
+      message: 'Batch transfer completed successfully',
+      data: {
+        transactionHash: receipt.transactionHash.toString(),
+        contractAddress: contractAddress.toLowerCase(),
+        recipientCount: addressList.length,
+        recipients: addressList.map(addr => addr.toLowerCase()),
+        amountsList: amountsList.map(amt => amt.toString()),
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        network: 'Polygon Amoy'
+      }
+    });
+
+  } catch (error) {
+    // Handle specific Web3 errors
+    if (error.message && error.message.includes('revert')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction reverted',
+        message: 'Contract call reverted. Insufficient balance or transfer not allowed by compliance rules.'
+      });
+    }
+
+    if (error.message && error.message.includes('insufficient funds')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Insufficient funds',
+        message: 'Insufficient funds to complete the batch transfer'
+      });
+    }
+
+    if (error.message && error.message.includes('nonce')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nonce error',
+        message: 'Transaction nonce error. Please try again.'
+      });
+    }
+
+    // Generic error handling
+    return res.status(500).json({
+      success: false,
+      error: 'Transaction failed',
+      message: error.message || 'Failed to complete batch transfer'
+    });
+  }
+}));
+
+/**
+ * @route   POST /api/blockchain/contract/force-transfer-tokens
+ * @desc    Force transfer tokens from one address to another (admin function)
+ * @access  Private (requires API Key in x-api-key header AND Bearer token)
+ * @body    { contractAddress: string, addressFrom: string, addressTo: string, amount: number }
+ */
+router.post('/contract/force-transfer-tokens', requireApiKey, requireBearerToken, catchAsync(async (req, res) => {
+  const { contractAddress, addressFrom, addressTo, amount } = req.body;
+
+  // Validate required fields
+  validate(contractAddress, 'Contract address is required');
+  validate(addressFrom, 'From address is required');
+  validate(addressTo, 'To address is required');
+  validate(amount !== undefined && amount !== null, 'Amount is required');
+
+  // Validate amount is a positive number
+  if (typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid amount',
+      message: 'Amount must be a positive number'
+    });
+  }
+
+  // Get RPC URL and Private Key from environment variables
+  const rpcURL = process.env.RPC_URL;
+  const privateKey = process.env.PORTAL_HQ_PRIVATE_KEY;
+
+  if (!rpcURL) {
+    return res.status(500).json({
+      success: false,
+      error: 'Configuration error',
+      message: 'RPC_URL not configured in environment variables'
+    });
+  }
+
+  if (!privateKey) {
+    return res.status(500).json({
+      success: false,
+      error: 'Configuration error',
+      message: 'PORTAL_HQ_PRIVATE_KEY not configured in environment variables'
+    });
+  }
+
+  // Initialize Web3 with the RPC URL
+  const web3 = new Web3(rpcURL);
+
+  // Validate address formats
+  if (!web3.utils.isAddress(contractAddress)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid contract address'
+    });
+  }
+
+  if (!web3.utils.isAddress(addressFrom)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid from address'
+    });
+  }
+
+  if (!web3.utils.isAddress(addressTo)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid address',
+      message: 'Please provide a valid to address'
+    });
+  }
+
+  // Contract ABI for the forcedTransfer function
+  const contractAbi = [{
+    'inputs': [
+      {
+        'internalType': 'address',
+        'name': 'from',
+        'type': 'address'
+      },
+      {
+        'internalType': 'address',
+        'name': 'to',
+        'type': 'address'
+      },
+      {
+        'internalType': 'uint256',
+        'name': 'amount',
+        'type': 'uint256'
+      }
+    ],
+    'name': 'forcedTransfer',
+    'outputs': [{
+      'internalType': 'bool',
+      'name': '',
+      'type': 'bool'
+    }],
+    'stateMutability': 'nonpayable',
+    'type': 'function'
+  }];
+
+  try {
+    // Create contract instance
+    const contract = new web3.eth.Contract(contractAbi, contractAddress);
+
+    // Create account from private key (ensure it has 0x prefix)
+    const formattedPrivateKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+    const account = web3.eth.accounts.privateKeyToAccount(formattedPrivateKey);
+    web3.eth.accounts.wallet.add(account);
+
+    // Get current nonce
+    const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
+
+    // Get current gas price
+    const gasPrice = await web3.eth.getGasPrice();
+
+    // Prepare transaction
+    const tx = {
+      from: account.address,
+      to: contractAddress,
+      gas: 300000,
+      gasPrice: gasPrice,
+      nonce: nonce,
+      data: contract.methods.forcedTransfer(addressFrom, addressTo, amount).encodeABI(),
+      chainId: 80002 // Polygon Amoy testnet
+    };
+
+    // Sign and send transaction
+    const signedTx = await web3.eth.accounts.signTransaction(tx, formattedPrivateKey);
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    res.status(200).json({
+      success: true,
+      message: 'Forced transfer completed successfully',
+      data: {
+        transactionHash: receipt.transactionHash.toString(),
+        contractAddress: contractAddress.toLowerCase(),
+        from: addressFrom.toLowerCase(),
+        to: addressTo.toLowerCase(),
+        amount: amount.toString(),
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        network: 'Polygon Amoy'
+      }
+    });
+
+  } catch (error) {
+    // Handle specific Web3 errors
+    if (error.message && error.message.includes('revert')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction reverted',
+        message: 'Contract call reverted. Insufficient balance, unauthorized, or transfer not allowed by compliance rules.'
+      });
+    }
+
+    if (error.message && error.message.includes('insufficient funds')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Insufficient funds',
+        message: 'Insufficient funds to complete the forced transfer'
+      });
+    }
+
+    if (error.message && error.message.includes('nonce')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nonce error',
+        message: 'Transaction nonce error. Please try again.'
+      });
+    }
+
+    // Generic error handling
+    return res.status(500).json({
+      success: false,
+      error: 'Transaction failed',
+      message: error.message || 'Failed to complete forced transfer'
     });
   }
 }));
