@@ -504,7 +504,7 @@ router.post('/contract/register-agent', authenticate, catchAsync(async (req, res
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.addAgent(userAddress).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -520,7 +520,7 @@ router.post('/contract/register-agent', authenticate, catchAsync(async (req, res
         agentAddress: userAddress.toLowerCase(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -761,7 +761,7 @@ router.delete('/contract/remove-agent', authenticate, catchAsync(async (req, res
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.removeAgent(userAddress).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -786,7 +786,7 @@ router.delete('/contract/remove-agent', authenticate, catchAsync(async (req, res
         agentAddress: userAddress.toLowerCase(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -955,7 +955,7 @@ router.post('/contract/register-user', authenticate, catchAsync(async (req, res)
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.registerIdentity(userAddress, countryCode, investorType).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -974,7 +974,7 @@ router.post('/contract/register-user', authenticate, catchAsync(async (req, res)
         investorType: investorType,
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -1216,7 +1216,7 @@ router.delete('/contract/remove-user', authenticate, catchAsync(async (req, res)
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.deleteIdentity(userAddress).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -1241,7 +1241,7 @@ router.delete('/contract/remove-user', authenticate, catchAsync(async (req, res)
         userAddress: userAddress.toLowerCase(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -1502,7 +1502,7 @@ router.post('/contract/add-country', authenticate, catchAsync(async (req, res) =
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.addAllowedCountry(countryCode).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -1519,7 +1519,7 @@ router.post('/contract/add-country', authenticate, catchAsync(async (req, res) =
         countryCode: countryCode,
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -1652,7 +1652,7 @@ router.delete('/contract/remove-country', authenticate, catchAsync(async (req, r
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.removeAllowedCountry(countryCode).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -1669,7 +1669,7 @@ router.delete('/contract/remove-country', authenticate, catchAsync(async (req, r
         countryCode: countryCode,
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -1782,7 +1782,7 @@ router.get('/contract/:contractAddress/balance/:userAddress', authenticate, catc
         userAddress: userAddress.toLowerCase(),
         balance: balance.toString(),
         balanceFormatted: web3.utils.fromWei(balance.toString(), 'ether'),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -1916,7 +1916,7 @@ router.post('/contract/mint-tokens', authenticate, catchAsync(async (req, res) =
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.mint(userAddress, amount).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -1933,7 +1933,7 @@ router.post('/contract/mint-tokens', authenticate, catchAsync(async (req, res) =
         amount: amount.toString(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -2095,7 +2095,7 @@ router.post('/contract/transfer-tokens', authenticate, catchAsync(async (req, re
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.transferFrom(addressFrom, addressTo, amount).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -2113,7 +2113,7 @@ router.post('/contract/transfer-tokens', authenticate, catchAsync(async (req, re
         amount: amount.toString(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -2275,7 +2275,7 @@ router.post('/contract/set-allowance', authenticate, catchAsync(async (req, res)
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.increaseAllowance(owner, spender, amount).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -2293,7 +2293,7 @@ router.post('/contract/set-allowance', authenticate, catchAsync(async (req, res)
         amount: amount.toString(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -2423,7 +2423,7 @@ router.get('/contract/allowance', requireBearerToken, catchAsync(async (req, res
         owner: owner.toLowerCase(),
         spender: spender.toLowerCase(),
         allowance: allowanceAmount.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -2584,7 +2584,7 @@ router.post('/contract/batch-transfer-tokens', authenticate, catchAsync(async (r
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.batchTransfer(addressList, amountsList).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -2602,7 +2602,7 @@ router.post('/contract/batch-transfer-tokens', authenticate, catchAsync(async (r
         amountsList: amountsList.map(amt => amt.toString()),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
@@ -2765,7 +2765,7 @@ router.post('/contract/force-transfer-tokens', requireApiKey, requireBearerToken
       gasPrice: gasPrice,
       nonce: nonce,
       data: contract.methods.forcedTransfer(addressFrom, addressTo, amount).encodeABI(),
-      chainId: 80002 // Polygon Amoy testnet
+      chainId: parseInt(process.env.CHAIN_ID || '80002') // Chain ID from env
     };
 
     // Sign and send transaction
@@ -2783,7 +2783,7 @@ router.post('/contract/force-transfer-tokens', requireApiKey, requireBearerToken
         amount: amount.toString(),
         blockNumber: receipt.blockNumber.toString(),
         gasUsed: receipt.gasUsed.toString(),
-        network: 'Polygon Amoy'
+        network: process.env.NETWORK_NAME || 'Polygon Amoy'
       }
     });
 
