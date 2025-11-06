@@ -11,6 +11,7 @@ const fs = require('fs');
 const uploadDir = path.join(__dirname, '../../uploads');
 const profilesDir = path.join(uploadDir, 'profiles');
 const companyLogosDir = path.join(uploadDir, 'company-logos');
+const projectImagesDir = path.join(uploadDir, 'project-images');
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -22,6 +23,10 @@ if (!fs.existsSync(profilesDir)) {
 
 if (!fs.existsSync(companyLogosDir)) {
   fs.mkdirSync(companyLogosDir, { recursive: true });
+}
+
+if (!fs.existsSync(projectImagesDir)) {
+  fs.mkdirSync(projectImagesDir, { recursive: true });
 }
 
 // Configure storage for profile images
@@ -116,9 +121,51 @@ const deleteOldCompanyLogo = (logoPath) => {
   }
 };
 
+// Configure storage for project images
+const projectImageStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, projectImagesDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename: projectId_timestamp.extension
+    const projectId = req.params.id || 'unknown';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const filename = `project_${projectId}_${timestamp}${ext}`;
+    cb(null, filename);
+  }
+});
+
+// Configure multer for project image upload
+const uploadProjectImage = multer({
+  storage: projectImageStorage,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max file size
+  }
+});
+
+// Helper function to delete old project image
+const deleteOldProjectImage = (imagePath) => {
+  if (!imagePath) return;
+
+  const fullPath = path.join(__dirname, '../..', imagePath);
+
+  if (fs.existsSync(fullPath)) {
+    try {
+      fs.unlinkSync(fullPath);
+      console.log('Old project image deleted:', fullPath);
+    } catch (error) {
+      console.error('Error deleting old project image:', error);
+    }
+  }
+};
+
 module.exports = {
   uploadProfileImage,
   deleteOldProfileImage,
   uploadCompanyLogo,
-  deleteOldCompanyLogo
+  deleteOldCompanyLogo,
+  uploadProjectImage,
+  deleteOldProjectImage
 };

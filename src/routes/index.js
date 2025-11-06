@@ -7,6 +7,7 @@ const customRoutes = require('./custom.routes');
 const companyRoutes = require('./company.routes');
 const notificationsRoutes = require('./notifications.routes');
 const blockchainRoutes = require('./blockchain.routes');
+const projectRoutes = require('./project.routes');
 
 const router = express.Router();
 
@@ -19,9 +20,10 @@ router.use('/custom', customRoutes);
 router.use('/company', companyRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/blockchain', blockchainRoutes);
+router.use('/projects', projectRoutes);
 
 // Root API endpoint
-router.get('/', (req, res) => {
+router.get('/', (_req, res) => {
   res.json({
     message: 'API is running',
     version: '1.0.0',
@@ -34,6 +36,7 @@ router.get('/', (req, res) => {
       company: '/api/company',
       notifications: '/api/notifications',
       blockchain: '/api/blockchain',
+      projects: '/api/projects',
     },
   });
 });
