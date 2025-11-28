@@ -89,7 +89,11 @@ app.use(cors(corsOptions));
 // ===== ADDITIONAL CORS HEADERS =====
 // Manual CORS headers for additional control
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  // Use environment variable or allow based on cors middleware
+  const allowedOrigin = process.env.FRONTEND_URL || req.headers.origin;
+  if (allowedOrigin) {
+    res.header('Access-Control-Allow-Origin', allowedOrigin);
+  }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   next();
@@ -98,7 +102,10 @@ app.use((req, res, next) => {
 // ===== STATIC FILES MIDDLEWARE =====
 // Serve uploaded files with CORS headers
 app.use('/uploads', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  const allowedOrigin = process.env.FRONTEND_URL || req.headers.origin;
+  if (allowedOrigin) {
+    res.header('Access-Control-Allow-Origin', allowedOrigin);
+  }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
