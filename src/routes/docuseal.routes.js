@@ -430,18 +430,28 @@ router.get('/submissions/stats', authenticate, catchAsync(async (req, res) => {
  * @body    Webhook payload from DocuSeal
  */
 router.post('/webhook', catchAsync(async (req, res) => {
+  // Validate X-PoliBit-Signature header
+  const signature = req.headers['x-polibit-signature'];
+  const expectedSignature = '2900f56566097c95876078f8ebed731a374a888d7f5a5a518e2e5d9f518775d8';
+
+  if (signature !== expectedSignature) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid signature'
+    });
+  }
+
   const { event_type, data } = req.body;
 
   // Validate webhook payload
   validate(event_type, 'event_type is required');
   validate(data, 'data is required');
 
-  // Only process submission.completed events
-  if (event_type === 'submission.completed') {
+  // Only process submission.created and submission.completed events
+  if (event_type === 'submission.created') {
     // Extract submission data
     const submissionId = data.id;
     const slug = data.slug;
-    const auditLogUrl = data.audit_log_url;
 
     // Get email from the first submitter
     const submitters = data.submitters || [];
@@ -459,38 +469,54 @@ router.post('/webhook', catchAsync(async (req, res) => {
     // Construct submission URL from slug
     const submissionURL = `https://docuseal.com/s/${slug}`;
 
-    // Check if submission already exists
-    const existingSubmission = await DocusealSubmission.findBySubmissionId(submissionId);
-
-    if (existingSubmission) {
-      // Update existing submission
-      const updatedSubmission = await DocusealSubmission.findByIdAndUpdate(
-        existingSubmission.id,
-        {
-          submissionURL,
-          auditLogUrl
-        }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: 'Submission updated successfully',
-        data: updatedSubmission
-      });
-    }
-
-    // Create new submission record
+    // Create new submission record with status 'created'
     const submission = await DocusealSubmission.create({
       email,
       submissionId,
       submissionURL,
-      auditLogUrl
+      status: 'created'
     });
 
     return res.status(201).json({
       success: true,
       message: 'Submission created successfully',
       data: submission
+    });
+  }
+
+  if (event_type === 'submission.completed') {
+    // Extract submission data
+    const submissionId = data.id;
+    const slug = data.slug;
+    const auditLogUrl = data.audit_log_url;
+
+    // Construct submission URL from slug
+    const submissionURL = `https://docuseal.com/s/${slug}`;
+
+    // Find existing submission by submissionId
+    const existingSubmission = await DocusealSubmission.findBySubmissionId(submissionId);
+
+    if (!existingSubmission) {
+      return res.status(404).json({
+        success: false,
+        message: `Submission with ID ${submissionId} not found`
+      });
+    }
+
+    // Update existing submission with completed status
+    const updatedSubmission = await DocusealSubmission.findByIdAndUpdate(
+      existingSubmission.id,
+      {
+        status: 'completed',
+        submissionURL,
+        auditLogUrl
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Submission updated successfully',
+      data: updatedSubmission
     });
   }
 
