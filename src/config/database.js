@@ -47,9 +47,27 @@ const connectDB = async () => {
 };
 
 // Get the Supabase client instance
+// Auto-initialize for serverless environments (Vercel)
 const getSupabase = () => {
   if (!supabase) {
-    throw new Error('Database not initialized. Call connectDB() first.');
+    // Auto-initialize for serverless environments
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials. Please check SUPABASE_URL and SUPABASE_ANON_KEY environment variables.');
+    }
+
+    console.log('🔄 Auto-initializing Supabase client for serverless environment...');
+
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: false
+      }
+    });
+
+    console.log(`✅ Supabase client initialized: ${supabaseUrl}`);
   }
   return supabase;
 };
