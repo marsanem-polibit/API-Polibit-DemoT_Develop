@@ -448,55 +448,75 @@ router.post('/webhook', catchAsync(async (req, res) => {
   validate(event_type, 'event_type is required');
   validate(data, 'data is required');
 
-  // Only process submission.created and submission.completed events
+  // Only process submission.created and form.completed events
   if (event_type === 'submission.created') {
-    // Extract submission data
-    const submissionId = data.id;
-    const slug = data.slug;
+    // Extract submission data from data.submission
     const email = data.email;
+    const submission = data.submission;
 
     // Validate required fields
-    if (!email) {
+    if (!email || !submission) {
       return res.status(400).json({
         success: false,
-        message: 'No email found in webhook payload'
+        message: 'Missing required fields: email or submission data'
       });
     }
 
-    // Construct submission URL from slug
-    const submissionURL = `https://docuseal.com/s/${slug}`;
+    const submissionId = submission.id;
+    const submissionURL = submission.url || data.submission_url;
+    const auditLogUrl = submission.audit_log_url || data.audit_log_url;
 
     // Create new submission record with status 'created'
-    const submission = await DocusealSubmission.create({
+    const newSubmission = await DocusealSubmission.create({
       email,
       submissionId,
       submissionURL,
+      auditLogUrl,
       status: 'created'
     });
 
     return res.status(201).json({
       success: true,
       message: 'Submission created successfully',
-      data: submission
+      data: newSubmission
     });
   }
 
-  if (event_type === 'submission.completed') {
-    // Extract submission data
-    const submissionId = data.id;
-    const slug = data.slug;
-    const auditLogUrl = data.audit_log_url;
+  if (event_type === 'form.completed') {
+    // Extract submission data from data.submission
+    const email = data.email;
+    const submission = data.submission;
 
-    // Construct submission URL from slug
-    const submissionURL = `https://docuseal.com/s/${slug}`;
+    // Validate required fields
+    if (!email || !submission) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: email or submission data'
+      });
+    }
+
+    const submissionId = submission.id;
+    const submissionURL = submission.url || data.submission_url;
+    const auditLogUrl = submission.audit_log_url || data.audit_log_url;
+    const status = submission.status || 'completed';
 
     // Find existing submission by submissionId
     const existingSubmission = await DocusealSubmission.findBySubmissionId(submissionId);
 
     if (!existingSubmission) {
-      return res.status(404).json({
-        success: false,
-        message: `Submission with ID ${submissionId} not found`
+      // Create new submission if it doesn't exist
+      const newSubmission = await DocusealSubmission.create({
+        email,
+        submissionId,
+        submissionURL,
+        auditLogUrl,
+        status
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Submission created successfully',
+        data: newSubmission
       });
     }
 
@@ -504,7 +524,7 @@ router.post('/webhook', catchAsync(async (req, res) => {
     const updatedSubmission = await DocusealSubmission.findByIdAndUpdate(
       existingSubmission.id,
       {
-        status: 'completed',
+        status,
         submissionURL,
         auditLogUrl
       }
