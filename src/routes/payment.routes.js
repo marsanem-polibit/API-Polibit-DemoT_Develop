@@ -1,0 +1,396 @@
+/**
+ * Payment API Routes
+ * Endpoints for managing structure investment payment data
+ */
+const express = require('express');
+const { authenticate } = require('../middleware/auth');
+const { catchAsync, validate } = require('../middleware/errorHandler');
+const { handleDocumentUpload } = require('../middleware/upload');
+const { uploadToSupabase } = require('../utils/fileUpload');
+const Payment = require('../models/supabase/payment');
+
+const router = express.Router();
+
+/**
+ * @route   GET /api/payments/health
+ * @desc    Health check for Payment API routes
+ * @access  Public
+ */
+router.get('/health', (_req, res) => {
+  res.json({
+    service: 'Payment API',
+    status: 'operational',
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
+ * @route   POST /api/payments
+ * @desc    Create a new payment with optional file upload
+ * @access  Private (requires authentication)
+ */
+router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res) => {
+  const {
+    email,
+    submissionId,
+    transactionHash,
+    amount,
+    structureId,
+    contractId,
+    status,
+    tokenId
+  } = req.body;
+
+  // Validate required fields
+  validate(email, 'Email is required');
+  validate(submissionId, 'Submission ID is required');
+  validate(amount, 'Amount is required');
+  validate(structureId, 'Structure ID is required');
+  validate(contractId, 'Contract ID is required');
+
+  let paymentImageUrl = null;
+
+  // If file is uploaded, save it to Supabase Storage
+  if (req.file) {
+    const folder = `payments/${submissionId}`;
+    const uploadResult = await uploadToSupabase(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      folder
+    );
+    paymentImageUrl = uploadResult.publicUrl;
+  }
+
+  // Create payment data
+  const paymentData = {
+    email: email.trim().toLowerCase(),
+    submissionId: submissionId.trim(),
+    paymentImage: paymentImageUrl,
+    transactionHash: transactionHash?.trim() || null,
+    amount: amount.trim(),
+    structureId: structureId.trim(),
+    contractId: contractId.trim(),
+    status: status?.trim() || 'pending',
+    tokenId: tokenId?.trim() || null
+  };
+
+  const payment = await Payment.create(paymentData);
+
+  res.status(201).json({
+    success: true,
+    message: 'Payment created successfully',
+    data: payment
+  });
+}));
+
+/**
+ * @route   GET /api/payments
+ * @desc    Get all payments with optional filters
+ * @access  Private (requires authentication)
+ */
+router.get('/', authenticate, catchAsync(async (req, res) => {
+  const {
+    email,
+    submissionId,
+    structureId,
+    contractId,
+    status,
+    transactionHash
+  } = req.query;
+
+  let filter = {};
+
+  if (email) filter.email = email.toLowerCase();
+  if (submissionId) filter.submissionId = submissionId;
+  if (structureId) filter.structureId = structureId;
+  if (contractId) filter.contractId = contractId;
+  if (status) filter.status = status;
+  if (transactionHash) filter.transactionHash = transactionHash;
+
+  const payments = await Payment.find(filter);
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    data: payments
+  });
+}));
+
+/**
+ * @route   GET /api/payments/email/:email
+ * @desc    Get all payments for a specific email
+ * @access  Private (requires authentication)
+ */
+router.get('/email/:email', authenticate, catchAsync(async (req, res) => {
+  const { email } = req.params;
+
+  validate(email, 'Email is required');
+
+  const payments = await Payment.findByEmail(email);
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    data: payments
+  });
+}));
+
+/**
+ * @route   GET /api/payments/submission/:submissionId
+ * @desc    Get payment by submission ID
+ * @access  Private (requires authentication)
+ */
+router.get('/submission/:submissionId', authenticate, catchAsync(async (req, res) => {
+  const { submissionId } = req.params;
+
+  validate(submissionId, 'Submission ID is required');
+
+  const payment = await Payment.findBySubmissionId(submissionId);
+
+  validate(payment, 'Payment not found for this submission ID');
+
+  res.status(200).json({
+    success: true,
+    data: payment
+  });
+}));
+
+/**
+ * @route   GET /api/payments/transaction/:transactionHash
+ * @desc    Get payment by transaction hash
+ * @access  Private (requires authentication)
+ */
+router.get('/transaction/:transactionHash', authenticate, catchAsync(async (req, res) => {
+  const { transactionHash } = req.params;
+
+  validate(transactionHash, 'Transaction hash is required');
+
+  const payment = await Payment.findByTransactionHash(transactionHash);
+
+  validate(payment, 'Payment not found for this transaction hash');
+
+  res.status(200).json({
+    success: true,
+    data: payment
+  });
+}));
+
+/**
+ * @route   GET /api/payments/structure/:structureId
+ * @desc    Get all payments for a specific structure
+ * @access  Private (requires authentication)
+ */
+router.get('/structure/:structureId', authenticate, catchAsync(async (req, res) => {
+  const { structureId } = req.params;
+
+  validate(structureId, 'Structure ID is required');
+
+  const payments = await Payment.findByStructureId(structureId);
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    data: payments
+  });
+}));
+
+/**
+ * @route   GET /api/payments/contract/:contractId
+ * @desc    Get all payments for a specific contract
+ * @access  Private (requires authentication)
+ */
+router.get('/contract/:contractId', authenticate, catchAsync(async (req, res) => {
+  const { contractId } = req.params;
+
+  validate(contractId, 'Contract ID is required');
+
+  const payments = await Payment.findByContractId(contractId);
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    data: payments
+  });
+}));
+
+/**
+ * @route   GET /api/payments/status/:status
+ * @desc    Get all payments by status
+ * @access  Private (requires authentication)
+ */
+router.get('/status/:status', authenticate, catchAsync(async (req, res) => {
+  const { status } = req.params;
+
+  validate(status, 'Status is required');
+
+  const validStatuses = ['pending', 'completed', 'failed', 'processing'];
+  validate(
+    validStatuses.includes(status),
+    `Status must be one of: ${validStatuses.join(', ')}`
+  );
+
+  const payments = await Payment.findByStatus(status);
+
+  res.status(200).json({
+    success: true,
+    count: payments.length,
+    data: payments
+  });
+}));
+
+/**
+ * @route   GET /api/payments/:id
+ * @desc    Get a single payment by ID
+ * @access  Private (requires authentication)
+ */
+router.get('/:id', authenticate, catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const payment = await Payment.findById(id);
+
+  validate(payment, 'Payment not found');
+
+  res.status(200).json({
+    success: true,
+    data: payment
+  });
+}));
+
+/**
+ * @route   PUT /api/payments/:id
+ * @desc    Update a payment
+ * @access  Private (requires authentication)
+ */
+router.put('/:id', authenticate, handleDocumentUpload, catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const payment = await Payment.findById(id);
+  validate(payment, 'Payment not found');
+
+  const updateData = {};
+  const allowedFields = [
+    'email',
+    'transactionHash',
+    'amount',
+    'status',
+    'tokenId'
+  ];
+
+  // Update allowed fields
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      if (field === 'email') {
+        updateData[field] = req.body[field].trim().toLowerCase();
+      } else if (typeof req.body[field] === 'string') {
+        updateData[field] = req.body[field].trim();
+      } else {
+        updateData[field] = req.body[field];
+      }
+    }
+  }
+
+  // If new file is uploaded, save it to Supabase Storage
+  if (req.file) {
+    const folder = `payments/${payment.submissionId}`;
+    const uploadResult = await uploadToSupabase(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      folder
+    );
+    updateData.paymentImage = uploadResult.publicUrl;
+  }
+
+  validate(Object.keys(updateData).length > 0, 'No valid fields provided for update');
+
+  // Validate status if provided
+  if (updateData.status) {
+    const validStatuses = ['pending', 'completed', 'failed', 'processing'];
+    validate(
+      validStatuses.includes(updateData.status),
+      `Status must be one of: ${validStatuses.join(', ')}`
+    );
+  }
+
+  const updatedPayment = await Payment.findByIdAndUpdate(id, updateData);
+
+  res.status(200).json({
+    success: true,
+    message: 'Payment updated successfully',
+    data: updatedPayment
+  });
+}));
+
+/**
+ * @route   PATCH /api/payments/:id/status
+ * @desc    Update payment status
+ * @access  Private (requires authentication)
+ */
+router.patch('/:id/status', authenticate, catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  validate(status, 'Status is required');
+
+  const validStatuses = ['pending', 'completed', 'failed', 'processing'];
+  validate(
+    validStatuses.includes(status),
+    `Status must be one of: ${validStatuses.join(', ')}`
+  );
+
+  const payment = await Payment.findById(id);
+  validate(payment, 'Payment not found');
+
+  const updatedPayment = await Payment.updateStatus(id, status);
+
+  res.status(200).json({
+    success: true,
+    message: 'Payment status updated successfully',
+    data: updatedPayment
+  });
+}));
+
+/**
+ * @route   PATCH /api/payments/:id/transaction
+ * @desc    Update payment transaction hash
+ * @access  Private (requires authentication)
+ */
+router.patch('/:id/transaction', authenticate, catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { transactionHash } = req.body;
+
+  validate(transactionHash, 'Transaction hash is required');
+
+  const payment = await Payment.findById(id);
+  validate(payment, 'Payment not found');
+
+  const updatedPayment = await Payment.updateTransactionHash(id, transactionHash.trim());
+
+  res.status(200).json({
+    success: true,
+    message: 'Transaction hash updated successfully',
+    data: updatedPayment
+  });
+}));
+
+/**
+ * @route   DELETE /api/payments/:id
+ * @desc    Delete a payment
+ * @access  Private (requires authentication)
+ */
+router.delete('/:id', authenticate, catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const payment = await Payment.findById(id);
+  validate(payment, 'Payment not found');
+
+  await Payment.findByIdAndDelete(id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Payment deleted successfully'
+  });
+}));
+
+module.exports = router;

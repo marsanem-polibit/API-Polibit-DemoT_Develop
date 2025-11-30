@@ -26,6 +26,9 @@ const messageRoutes = require('./message.routes');
 // Email System routes
 const emailRoutes = require('./email.routes');
 
+// Payment routes
+const paymentRoutes = require('./payment.routes');
+
 const router = express.Router();
 
 // Mount route modules
@@ -56,6 +59,9 @@ router.use('/', messageRoutes); // For /api/messages/* routes
 
 // Mount Email System routes
 router.use('/users', emailRoutes); // For /api/users/:userId/email-* routes
+
+// Mount Payment routes
+router.use('/payments', paymentRoutes);
 
 // Root API endpoint
 router.get('/', (_req, res) => {
@@ -88,6 +94,8 @@ router.get('/', (_req, res) => {
       emailSettings: '/api/users/:userId/email-settings',
       sendEmail: '/api/users/:userId/send-email',
       emailLogs: '/api/users/:userId/email-logs',
+      // Payment endpoints
+      payments: '/api/payments',
     },
   });
 });

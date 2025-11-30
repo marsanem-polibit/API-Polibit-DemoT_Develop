@@ -35,6 +35,9 @@ const MFAFactor = require('./mfaFactor');
 // DocuSeal System models
 const DocusealSubmission = require('./docusealSubmission');
 
+// Payment System models
+const Payment = require('./payment');
+
 module.exports = {
   // Core models
   User,
@@ -69,4 +72,7 @@ module.exports = {
 
   // DocuSeal System models
   DocusealSubmission,
+
+  // Payment System models
+  Payment,
 };
