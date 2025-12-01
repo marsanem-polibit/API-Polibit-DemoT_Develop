@@ -21,15 +21,23 @@ function initializeSocket(server) {
         // Allow requests with no origin (mobile apps, etc.)
         if (!origin) return callback(null, true);
 
+        // Development whitelist (always allowed)
+        const developmentOrigins = [
+          'http://localhost:3000',
+          'http://localhost:3001',
+          'http://127.0.0.1:3000',
+          'http://127.0.0.1:3001',
+        ];
+
         // In development, allow all origins
         if (process.env.NODE_ENV !== 'production') {
           return callback(null, true);
         }
 
-        // In production, check against whitelist
+        // In production, check against whitelist (including development origins for debugging)
         const whitelist = process.env.CORS_WHITELIST
-          ? process.env.CORS_WHITELIST.split(',')
-          : [];
+          ? [...developmentOrigins, ...process.env.CORS_WHITELIST.split(',')]
+          : developmentOrigins;
 
         if (whitelist.indexOf(origin) !== -1 || whitelist.includes('*')) {
           callback(null, true);

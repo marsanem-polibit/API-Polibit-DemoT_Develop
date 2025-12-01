@@ -55,17 +55,25 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
+    // Development whitelist (always allowed)
+    const developmentOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+    ];
+
     // In development, allow all origins
     if (isDevelopment()) {
       return callback(null, true);
     }
-    
-    // In production, check against whitelist
-    const whitelist = process.env.CORS_WHITELIST 
-      ? process.env.CORS_WHITELIST.split(',') 
-      : [];
-    
+
+    // In production, check against whitelist (including development origins for debugging)
+    const whitelist = process.env.CORS_WHITELIST
+      ? [...developmentOrigins, ...process.env.CORS_WHITELIST.split(',')]
+      : developmentOrigins;
+
     if (whitelist.indexOf(origin) !== -1 || whitelist.includes('*')) {
       callback(null, true);
     } else {
@@ -89,8 +97,12 @@ app.use(cors(corsOptions));
 // ===== ADDITIONAL CORS HEADERS =====
 // Manual CORS headers for additional control
 app.use((req, res, next) => {
-  // Use environment variable or allow based on cors middleware
-  const allowedOrigin = process.env.FRONTEND_URL || req.headers.origin;
+  // In development, allow the requesting origin or default to localhost:3000
+  const requestOrigin = req.headers.origin;
+  const allowedOrigin = isDevelopment()
+    ? (requestOrigin || 'http://localhost:3000')
+    : (process.env.FRONTEND_URL || requestOrigin);
+
   if (allowedOrigin) {
     res.header('Access-Control-Allow-Origin', allowedOrigin);
   }
@@ -102,7 +114,12 @@ app.use((req, res, next) => {
 // ===== STATIC FILES MIDDLEWARE =====
 // Serve uploaded files with CORS headers
 app.use('/uploads', (req, res, next) => {
-  const allowedOrigin = process.env.FRONTEND_URL || req.headers.origin;
+  // In development, allow the requesting origin or default to localhost:3000
+  const requestOrigin = req.headers.origin;
+  const allowedOrigin = isDevelopment()
+    ? (requestOrigin || 'http://localhost:3000')
+    : (process.env.FRONTEND_URL || requestOrigin);
+
   if (allowedOrigin) {
     res.header('Access-Control-Allow-Origin', allowedOrigin);
   }
