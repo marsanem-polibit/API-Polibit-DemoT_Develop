@@ -745,7 +745,108 @@ The API uses authentication middleware that checks for user credentials. Most en
 }
 ```
 
-### 7. Update Investor
+### 7. Get Investor Capital Calls Summary
+
+**Endpoint:** `GET /api/investors/:id/capital-calls`
+
+**Access:** Private (Root/Admin/Support can access any, Investors can access their own)
+
+**Description:** Returns capital calls summary for an investor, including all structures they're invested in and detailed capital call allocations with payment status.
+
+**Access Control:**
+- Root (role=0): Can access any investor's capital calls
+- Admin (role=1): Can access any investor's capital calls
+- Support (role=2): Can access any investor's capital calls
+- Investor (role=3): Can only access their own capital calls (when `:id` matches their user ID)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "investorId": "user-id",
+    "investorName": "John Doe",
+    "investorEmail": "john.doe@example.com",
+    "summary": {
+      "totalCalled": 5000000,
+      "totalPaid": 4000000,
+      "outstanding": 1000000,
+      "totalCalls": 10
+    },
+    "structures": [
+      {
+        "id": "structure-id",
+        "name": "Tech Growth Fund I",
+        "type": "Fund",
+        "status": "Active"
+      }
+    ],
+    "capitalCalls": [
+      {
+        "id": "capital-call-id",
+        "structureId": "structure-id",
+        "structureName": "Tech Growth Fund I",
+        "callNumber": "CC-2024-001",
+        "callDate": "2024-02-01T00:00:00Z",
+        "dueDate": "2024-03-01T00:00:00Z",
+        "allocatedAmount": 500000,
+        "paidAmount": 500000,
+        "outstanding": 0,
+        "status": "Paid",
+        "purpose": "Investment in TechCo"
+      },
+      {
+        "id": "capital-call-id-2",
+        "structureId": "structure-id",
+        "structureName": "Tech Growth Fund I",
+        "callNumber": "CC-2024-002",
+        "callDate": "2024-05-01T00:00:00Z",
+        "dueDate": "2024-06-01T00:00:00Z",
+        "allocatedAmount": 500000,
+        "paidAmount": 300000,
+        "outstanding": 200000,
+        "status": "Partially Paid",
+        "purpose": "Follow-on investment"
+      }
+    ]
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "message": "Invalid investor ID format"
+}
+```
+```json
+{
+  "success": false,
+  "message": "Investor not found"
+}
+```
+```json
+{
+  "success": false,
+  "message": "User is not an investor"
+}
+```
+```json
+{
+  "success": false,
+  "message": "Unauthorized access to investor data"
+}
+```
+
+**Notes:**
+- Returns empty arrays if no capital calls found
+- Only shows structures with "Active" status
+- Capital calls are ordered by call date (most recent first)
+- Outstanding amount is calculated as allocatedAmount - paidAmount
+- This endpoint bridges the users table (role=3) with the investors table via email matching
+
+### 8. Update Investor
 
 **Endpoint:** `PUT /api/investors/:id`
 
@@ -789,7 +890,7 @@ The API uses authentication middleware that checks for user credentials. Most en
 }
 ```
 
-### 8. Delete Investor
+### 9. Delete Investor
 
 **Endpoint:** `DELETE /api/investors/:id`
 
