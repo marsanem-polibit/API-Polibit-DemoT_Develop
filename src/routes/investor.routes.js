@@ -319,6 +319,49 @@ router.get('/:id/commitments', authenticate, catchAsync(async (req, res) => {
 }));
 
 /**
+ * @route   GET /api/investors/:id/capital-calls
+ * @desc    Get investor capital calls with structures and summary
+ * @access  Private (requires authentication, Root/Admin/Support/Own investor)
+ */
+router.get('/:id/capital-calls', authenticate, catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const requestingUserId = req.auth?.userId || req.user?.id;
+  const requestingUserRole = req.auth?.role ?? req.user?.role;
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  validate(uuidRegex.test(id), 'Invalid investor ID format');
+
+  const user = await User.findById(id);
+  validate(user, 'Investor not found');
+  validate(user.role === ROLES.INVESTOR, 'User is not an investor');
+
+  // Check access: Root/Admin/Support can access any, Investors can only access their own
+  const hasAccess =
+    requestingUserRole === ROLES.ROOT ||
+    requestingUserRole === ROLES.ADMIN ||
+    requestingUserRole === ROLES.SUPPORT ||
+    (requestingUserRole === ROLES.INVESTOR && requestingUserId === id);
+
+  validate(hasAccess, 'Unauthorized access to investor data');
+
+  const capitalCallsData = await User.getCapitalCallsSummary(id);
+
+  // Add investor information to the response
+  const investorName = User.getDisplayName(user);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      investorId: user.id,
+      investorName: investorName,
+      investorEmail: user.email,
+      ...capitalCallsData
+    }
+  });
+}));
+
+/**
  * @route   PUT /api/investors/:id
  * @desc    Update an investor
  * @access  Private (requires authentication, Root/Admin only)

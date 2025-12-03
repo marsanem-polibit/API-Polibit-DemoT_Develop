@@ -595,6 +595,129 @@ class User {
   }
 
   /**
+   * Get capital calls summary for an investor
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Capital calls summary with structures and calls
+   */
+  static async getCapitalCallsSummary(userId) {
+    const supabase = getSupabase();
+
+    // Get the user first
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
+    if (userError) throw userError;
+
+    // Find investor record by email (investors table is separate from users)
+    const { data: investor, error: investorError } = await supabase
+      .from('investors')
+      .select('id')
+      .eq('email', user.email)
+      .single();
+
+    // If investor not found, return empty data
+    if (investorError || !investor) {
+      return {
+        summary: {
+          totalCalled: 0,
+          totalPaid: 0,
+          outstanding: 0,
+          totalCalls: 0
+        },
+        structures: [],
+        capitalCalls: []
+      };
+    }
+
+    // Get all structures for this investor
+    const { data: structureInvestors, error: siError } = await supabase
+      .from('structure_investors')
+      .select(`
+        structure:structures (
+          id,
+          name,
+          type,
+          status
+        )
+      `)
+      .eq('investor_id', investor.id);
+
+    if (siError) throw siError;
+
+    const structures = (structureInvestors || [])
+      .filter(si => si.structure)
+      .map(si => ({
+        id: si.structure.id,
+        name: si.structure.name,
+        type: si.structure.type,
+        status: si.structure.status
+      }));
+
+    // Get all capital call allocations for this investor with capital call details
+    const { data: allocations, error: allocError } = await supabase
+      .from('capital_call_allocations')
+      .select(`
+        id,
+        allocated_amount,
+        paid_amount,
+        status,
+        capital_call:capital_calls (
+          id,
+          structure_id,
+          call_number,
+          call_date,
+          due_date,
+          status,
+          purpose
+        )
+      `)
+      .eq('investor_id', investor.id)
+      .order('capital_call.call_date', { ascending: false });
+
+    if (allocError) throw allocError;
+
+    // Process capital calls
+    const capitalCalls = (allocations || [])
+      .filter(alloc => alloc.capital_call)
+      .map(alloc => {
+        const structure = structures.find(s => s.id === alloc.capital_call.structure_id);
+        return {
+          id: alloc.capital_call.id,
+          structureId: alloc.capital_call.structure_id,
+          structureName: structure?.name || 'Unknown Structure',
+          callNumber: alloc.capital_call.call_number,
+          callDate: alloc.capital_call.call_date,
+          dueDate: alloc.capital_call.due_date,
+          allocatedAmount: parseFloat(alloc.allocated_amount) || 0,
+          paidAmount: parseFloat(alloc.paid_amount) || 0,
+          outstanding: (parseFloat(alloc.allocated_amount) || 0) - (parseFloat(alloc.paid_amount) || 0),
+          status: alloc.status || alloc.capital_call.status,
+          purpose: alloc.capital_call.purpose
+        };
+      });
+
+    // Calculate summary
+    const totalCalled = capitalCalls.reduce((sum, call) => sum + call.allocatedAmount, 0);
+    const totalPaid = capitalCalls.reduce((sum, call) => sum + call.paidAmount, 0);
+    const outstanding = totalCalled - totalPaid;
+    const totalCalls = capitalCalls.length;
+
+    return {
+      summary: {
+        totalCalled,
+        totalPaid,
+        outstanding: outstanding > 0 ? outstanding : 0,
+        totalCalls
+      },
+      structures: structures.filter(s => s.status === 'Active'),
+      capitalCalls
+    };
+  }
+
+  /**
    * Convert database fields to model fields (snake_case to camelCase)
    * @param {Object} dbUser - User from database
    * @returns {Object} User model
