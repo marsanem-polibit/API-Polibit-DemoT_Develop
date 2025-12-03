@@ -466,10 +466,16 @@ class User {
       };
     }
 
-    // Get all capital call allocations for this user
+    // Get all capital call allocations for this user with structure info
     const { data: allocations, error: allocError } = await supabase
       .from('capital_call_allocations')
-      .select('allocated_amount, paid_amount, capital_call_id')
+      .select(`
+        allocated_amount,
+        paid_amount,
+        capital_call:capital_calls (
+          structure_id
+        )
+      `)
       .eq('investor_id', userId);
 
     if (allocError) throw allocError;
@@ -480,11 +486,10 @@ class User {
 
     // Process structures
     const structures = structureInvestors.map(si => {
-      const structureAllocations = allocations?.filter(a => {
-        // We need to check if this allocation belongs to this structure
-        // This would require joining with capital_calls, but for now we'll include all
-        return true;
-      }) || [];
+      // Filter allocations for this specific structure
+      const structureAllocations = allocations?.filter(a =>
+        a.capital_call?.structure_id === si.structure_id
+      ) || [];
 
       const structureCalledCapital = structureAllocations.reduce((sum, alloc) =>
         sum + (parseFloat(alloc.allocated_amount) || 0), 0);
@@ -493,13 +498,16 @@ class User {
       const uncalledCapital = commitment - structureCalledCapital;
 
       return {
-        structureId: si.structure.id,
-        structureName: si.structure.name,
-        structureType: si.structure.type,
-        structureStatus: si.structure.status,
+        id: si.structure.id,
+        name: si.structure.name,
+        type: si.structure.type,
         commitment: commitment,
         calledCapital: structureCalledCapital,
         uncalledCapital: uncalledCapital > 0 ? uncalledCapital : 0,
+        ownershipPercent: parseFloat(si.ownership_percent) || 0,
+        status: si.structure.status,
+        investedDate: si.invested_at,
+        onboardingStatus: 'Complete',
         currency: si.structure.base_currency || 'USD'
       };
     });
@@ -507,14 +515,14 @@ class User {
     // Calculate totals
     const totalCommitment = structures.reduce((sum, s) => sum + s.commitment, 0);
     const totalUncalledCapital = totalCommitment - calledCapital;
-    const activeFunds = structures.filter(s => s.structureStatus === 'Active').length;
+    const activeFunds = structures.filter(s => s.status === 'Active').length;
 
     return {
       totalCommitment,
       calledCapital,
       uncalledCapital: totalUncalledCapital > 0 ? totalUncalledCapital : 0,
       activeFunds,
-      structures: structures.filter(s => s.structureStatus === 'Active')
+      structures: structures.filter(s => s.status === 'Active')
     };
   }
 
