@@ -344,6 +344,37 @@ router.get('/me/capital-calls-summary', authenticate, catchAsync(async (req, res
 }));
 
 /**
+ * @route   GET /api/investors/me/capital-calls
+ * @desc    Get authenticated user's capital calls with structures and summary
+ * @access  Private (requires authentication, Investor role)
+ */
+router.get('/me/capital-calls', authenticate, catchAsync(async (req, res) => {
+  const userId = req.auth?.userId || req.user?.id;
+  const userRole = req.auth?.role ?? req.user?.role;
+
+  // Verify user is an investor
+  validate(userRole === ROLES.INVESTOR, 'This endpoint is only accessible to investors');
+
+  const user = await User.findById(userId);
+  validate(user, 'User not found');
+
+  const capitalCallsData = await User.getCapitalCallsSummary(userId);
+
+  // Add investor information to the response
+  const investorName = User.getDisplayName(user);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      userId: user.id,
+      userName: investorName,
+      userEmail: user.email,
+      ...capitalCallsData
+    }
+  });
+}));
+
+/**
  * @route   GET /api/investors/:id/capital-calls/summary
  * @desc    Get investor capital calls summary (Total Called, Total Paid, Outstanding, Total Calls)
  * @access  Private (requires authentication, Root/Admin/Support/Own investor)
