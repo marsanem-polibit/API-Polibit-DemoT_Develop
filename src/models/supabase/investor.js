@@ -289,7 +289,7 @@ class Investor {
     const supabase = getSupabase();
 
     const { data, error } = await supabase.rpc('get_investor_portfolio_summary', {
-      investor_id: investorId
+      p_user_id: investorId
     });
 
     if (error) {

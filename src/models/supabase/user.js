@@ -405,7 +405,7 @@ class User {
     const supabase = getSupabase();
 
     const { data, error } = await supabase.rpc('get_investor_portfolio_summary', {
-      user_id: userId
+      p_user_id: userId
     });
 
     if (error) throw error;

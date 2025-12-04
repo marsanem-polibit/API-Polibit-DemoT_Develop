@@ -142,7 +142,7 @@ psql "postgresql://[user]:[password]@[host]:[port]/[database]" -f migrations/rol
 
 The following database functions have been updated to use `user_id`:
 
-- `get_investor_portfolio_summary(user_id)` - Previously used `investor_id`
+- `get_investor_portfolio_summary(p_user_id)` - Previously used `investor_id`
 - `get_investor_distribution_total(p_user_id, p_structure_id)` - Previously used `p_investor_id`
 
 ## Code Changes

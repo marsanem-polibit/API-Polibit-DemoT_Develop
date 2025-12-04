@@ -91,7 +91,7 @@ ON investment_subscriptions(user_id);
 -- ============================================================================
 
 -- Update get_investor_portfolio_summary function to use user_id
-CREATE OR REPLACE FUNCTION get_investor_portfolio_summary(user_id UUID)
+CREATE OR REPLACE FUNCTION get_investor_portfolio_summary(p_user_id UUID)
 RETURNS TABLE (
   total_structures INTEGER,
   total_commitment NUMERIC,
@@ -109,7 +109,7 @@ BEGIN
     COUNT(DISTINCT CASE WHEN s.status = 'Active' THEN si.structure_id END)::INTEGER AS active_structures
   FROM structure_investors si
   JOIN structures s ON s.id = si.structure_id
-  WHERE si.user_id = user_id;
+  WHERE si.user_id = p_user_id;
 END;
 $$ LANGUAGE plpgsql;
 
