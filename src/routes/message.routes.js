@@ -21,11 +21,55 @@ const {
 } = require('../config/socket');
 
 const router = express.Router();
+const { ROLES } = require('../models/supabase/user');
 
 /**
  * @route   GET /api/conversations/:conversationId/messages
  * @desc    Get messages for a conversation with pagination
  * @access  Private (requires authentication)
+ *
+ * @param {string} conversationId - UUID of the conversation (URL parameter)
+ *
+ * @query {number} [limit=50] - Maximum number of messages to return (optional)
+ * @query {string} [before] - Message ID to fetch messages before (for pagination, optional)
+ *
+ * @success {200} Success Response
+ * {
+ *   "success": true,
+ *   "count": 25,
+ *   "data": [
+ *     {
+ *       "id": "msg-uuid",
+ *       "conversationId": "conv-uuid",
+ *       "senderId": "user-uuid",
+ *       "content": "Hello!",
+ *       "type": "text",
+ *       "createdAt": "2025-12-05T10:30:00Z",
+ *       "updatedAt": "2025-12-05T10:30:00Z",
+ *       "deletedAt": null,
+ *       "attachments": []
+ *     }
+ *   ],
+ *   "hasMore": true
+ * }
+ *
+ * @error {400} Bad Request - Invalid conversation ID format
+ * {
+ *   "success": false,
+ *   "message": "Invalid conversation ID format"
+ * }
+ *
+ * @error {403} Forbidden - Not a participant
+ * {
+ *   "success": false,
+ *   "message": "You are not a participant in this conversation"
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
  */
 router.get('/:conversationId/messages', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
@@ -58,6 +102,81 @@ router.get('/:conversationId/messages', authenticate, catchAsync(async (req, res
  * @route   POST /api/conversations/:conversationId/messages
  * @desc    Send a message (text or file) to a conversation
  * @access  Private (requires authentication)
+ *
+ * @param {string} conversationId - UUID of the conversation (URL parameter)
+ *
+ * @body For text messages (application/json):
+ * {
+ *   "content": "Hello, how are you?",
+ *   "type": "text"  // Optional: "text" or "system", defaults to "text"
+ * }
+ *
+ * @body For file messages (multipart/form-data):
+ * {
+ *   "file": <binary file data>,
+ *   "content": "Optional message caption"  // Optional
+ * }
+ *
+ * @success {201} Success Response (text message)
+ * {
+ *   "success": true,
+ *   "message": "Message sent successfully",
+ *   "data": {
+ *     "id": "msg-uuid",
+ *     "conversationId": "conv-uuid",
+ *     "senderId": "user-uuid",
+ *     "content": "Hello, how are you?",
+ *     "type": "text",
+ *     "createdAt": "2025-12-05T10:30:00Z",
+ *     "updatedAt": "2025-12-05T10:30:00Z",
+ *     "deletedAt": null,
+ *     "attachments": []
+ *   }
+ * }
+ *
+ * @success {201} Success Response (file message)
+ * {
+ *   "success": true,
+ *   "message": "Message sent successfully",
+ *   "data": {
+ *     "id": "msg-uuid",
+ *     "conversationId": "conv-uuid",
+ *     "senderId": "user-uuid",
+ *     "content": "Sent a file",
+ *     "type": "file",
+ *     "createdAt": "2025-12-05T10:30:00Z",
+ *     "updatedAt": "2025-12-05T10:30:00Z",
+ *     "deletedAt": null,
+ *     "attachments": [
+ *       {
+ *         "id": "attachment-uuid",
+ *         "messageId": "msg-uuid",
+ *         "filePath": "https://storage.url/file.pdf",
+ *         "fileName": "document.pdf",
+ *         "fileSize": 1024567,
+ *         "mimeType": "application/pdf"
+ *       }
+ *     ]
+ *   }
+ * }
+ *
+ * @error {400} Bad Request - Invalid conversation ID or missing content
+ * {
+ *   "success": false,
+ *   "message": "Invalid conversation ID format" // or "Message content is required"
+ * }
+ *
+ * @error {403} Forbidden - Not a participant
+ * {
+ *   "success": false,
+ *   "message": "You are not a participant in this conversation"
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
  */
 router.post('/:conversationId/messages', authenticate, handleChatAttachmentUpload, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
@@ -140,6 +259,58 @@ router.post('/:conversationId/messages', authenticate, handleChatAttachmentUploa
  * @route   POST /api/conversations/:conversationId/messages/file
  * @desc    Send a message with file attachment
  * @access  Private (requires authentication)
+ *
+ * @param {string} conversationId - UUID of the conversation (URL parameter)
+ *
+ * @body (multipart/form-data):
+ * {
+ *   "file": <binary file data> (required),
+ *   "content": "Optional message caption"  // Optional, defaults to "Sent a file"
+ * }
+ *
+ * @success {201} Success Response
+ * {
+ *   "success": true,
+ *   "message": "Message sent successfully",
+ *   "data": {
+ *     "id": "msg-uuid",
+ *     "conversationId": "conv-uuid",
+ *     "senderId": "user-uuid",
+ *     "content": "Sent a file",
+ *     "type": "file",
+ *     "createdAt": "2025-12-05T10:30:00Z",
+ *     "updatedAt": "2025-12-05T10:30:00Z",
+ *     "deletedAt": null,
+ *     "attachments": [
+ *       {
+ *         "id": "attachment-uuid",
+ *         "messageId": "msg-uuid",
+ *         "filePath": "https://storage.url/chat-attachments/conv-uuid/file.pdf",
+ *         "fileName": "document.pdf",
+ *         "fileSize": 1024567,
+ *         "mimeType": "application/pdf"
+ *       }
+ *     ]
+ *   }
+ * }
+ *
+ * @error {400} Bad Request - Invalid conversation ID or missing file
+ * {
+ *   "success": false,
+ *   "message": "File is required" // or "Invalid conversation ID format"
+ * }
+ *
+ * @error {403} Forbidden - Not a participant
+ * {
+ *   "success": false,
+ *   "message": "You are not a participant in this conversation"
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
  */
 router.post('/:conversationId/messages/file', authenticate, handleChatAttachmentUpload, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
@@ -208,6 +379,47 @@ router.post('/:conversationId/messages/file', authenticate, handleChatAttachment
  * @route   GET /api/conversations/:conversationId/messages/search
  * @desc    Search messages in a conversation
  * @access  Private (requires authentication)
+ *
+ * @param {string} conversationId - UUID of the conversation (URL parameter)
+ *
+ * @query {string} q - Search query (required, minimum 2 characters)
+ *
+ * @success {200} Success Response
+ * {
+ *   "success": true,
+ *   "count": 5,
+ *   "data": [
+ *     {
+ *       "id": "msg-uuid",
+ *       "conversationId": "conv-uuid",
+ *       "senderId": "user-uuid",
+ *       "content": "Hello, how are you?",
+ *       "type": "text",
+ *       "createdAt": "2025-12-05T10:30:00Z",
+ *       "updatedAt": "2025-12-05T10:30:00Z",
+ *       "deletedAt": null,
+ *       "attachments": []
+ *     }
+ *   ]
+ * }
+ *
+ * @error {400} Bad Request - Invalid conversation ID or search query
+ * {
+ *   "success": false,
+ *   "message": "Search query is required" // or "Search query must be at least 2 characters"
+ * }
+ *
+ * @error {403} Forbidden - Not a participant
+ * {
+ *   "success": false,
+ *   "message": "You are not a participant in this conversation"
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
  */
 router.get('/:conversationId/messages/search', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
@@ -240,6 +452,40 @@ router.get('/:conversationId/messages/search', authenticate, catchAsync(async (r
  * @route   PUT /api/messages/:messageId/read
  * @desc    Mark a message as read
  * @access  Private (requires authentication)
+ *
+ * @param {string} messageId - UUID of the message to mark as read (URL parameter)
+ *
+ * @body No request body required
+ *
+ * @success {200} Success Response
+ * {
+ *   "success": true,
+ *   "message": "Message marked as read"
+ * }
+ *
+ * @error {400} Bad Request - Invalid message ID format
+ * {
+ *   "success": false,
+ *   "message": "Invalid message ID format"
+ * }
+ *
+ * @error {404} Not Found - Message not found
+ * {
+ *   "success": false,
+ *   "message": "Message not found"
+ * }
+ *
+ * @error {403} Forbidden - Not a participant in conversation
+ * {
+ *   "success": false,
+ *   "message": "You are not a participant in this conversation"
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
  */
 router.put('/messages/:messageId/read', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
@@ -273,6 +519,43 @@ router.put('/messages/:messageId/read', authenticate, catchAsync(async (req, res
  * @route   DELETE /api/messages/:messageId
  * @desc    Delete a message (soft delete)
  * @access  Private (requires authentication)
+ *
+ * @param {string} messageId - UUID of the message to delete (URL parameter)
+ *
+ * @body No request body required
+ *
+ * @note Only the message sender or conversation admin can delete messages
+ *
+ * @success {200} Success Response
+ * {
+ *   "success": true,
+ *   "message": "Message deleted successfully"
+ * }
+ *
+ * @error {400} Bad Request - Invalid message ID format
+ * {
+ *   "success": false,
+ *   "message": "Invalid message ID format"
+ * }
+ *
+ * @error {404} Not Found - Message not found
+ * {
+ *   "success": false,
+ *   "message": "Message not found"
+ * }
+ *
+ * @error {403} Forbidden - Not a participant or not authorized to delete
+ * {
+ *   "success": false,
+ *   "message": "You are not a participant in this conversation"
+ *   // or "You can only delete your own messages or you must be an admin"
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
  */
 router.delete('/messages/:messageId', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
@@ -310,9 +593,90 @@ router.delete('/messages/:messageId', authenticate, catchAsync(async (req, res) 
 }));
 
 /**
+ * @route   GET /api/messages/available-users
+ * @desc    Get users available to send messages (Admin and Support roles)
+ * @access  Private (requires authentication)
+ *
+ * @body No request body required
+ *
+ * @success {200} Success Response
+ * {
+ *   "success": true,
+ *   "count": 5,
+ *   "data": [
+ *     {
+ *       "id": "user-uuid",
+ *       "firstName": "John",
+ *       "lastName": "Doe",
+ *       "email": "john.doe@example.com",
+ *       "profileImage": "https://storage.url/profile.jpg",
+ *       "role": 1,
+ *       "roleName": "admin"
+ *     },
+ *     {
+ *       "id": "user-uuid-2",
+ *       "firstName": "Jane",
+ *       "lastName": "Smith",
+ *       "email": "jane.smith@example.com",
+ *       "profileImage": null,
+ *       "role": 2,
+ *       "roleName": "support"
+ *     }
+ *   ]
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
+ */
+router.get('/messages/available-users', authenticate, catchAsync(async (req, res) => {
+  // Get all users with role 1 (ADMIN) or 2 (SUPPORT)
+  const supabase = require('../../config/database').getSupabase();
+
+  const { data: users, error } = await supabase
+    .from('users')
+    .select('id, first_name, last_name, email, profile_image, role')
+    .in('role', [ROLES.ADMIN, ROLES.SUPPORT])
+    .eq('is_active', true)
+    .order('first_name', { ascending: true });
+
+  if (error) {
+    throw new Error(`Error fetching users: ${error.message}`);
+  }
+
+  // Format response with only necessary fields
+  const formattedUsers = users.map(user => ({
+    id: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    email: user.email,
+    profileImage: user.profile_image,
+    role: user.role,
+    roleName: user.role === ROLES.ADMIN ? 'admin' : 'support'
+  }));
+
+  res.status(200).json({
+    success: true,
+    count: formattedUsers.length,
+    data: formattedUsers
+  });
+}));
+
+/**
  * @route   GET /api/messages/health
  * @desc    Health check for Message API routes
- * @access  Public
+ * @access  Public (no authentication required)
+ *
+ * @body No request body required
+ *
+ * @success {200} Success Response
+ * {
+ *   "service": "Message API",
+ *   "status": "operational",
+ *   "timestamp": "2025-12-05T10:30:00.000Z"
+ * }
  */
 router.get('/messages/health', (_req, res) => {
   res.json({
