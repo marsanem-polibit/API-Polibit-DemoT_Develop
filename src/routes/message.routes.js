@@ -633,7 +633,7 @@ router.delete('/messages/:messageId', authenticate, catchAsync(async (req, res) 
  */
 router.get('/messages/available-users', authenticate, catchAsync(async (req, res) => {
   // Get all users with role 1 (ADMIN) or 2 (SUPPORT)
-  const supabase = require('../../config/database').getSupabase();
+  const supabase = require('../config/database').getSupabase();
 
   const { data: users, error } = await supabase
     .from('users')
