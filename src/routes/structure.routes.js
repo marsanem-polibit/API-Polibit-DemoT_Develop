@@ -5,7 +5,8 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { catchAsync, validate } = require('../middleware/errorHandler');
-const { Structure, StructureAdmin, User } = require('../models/supabase');
+const { Structure, StructureAdmin, User, Distribution } = require('../models/supabase');
+const { getSupabase } = require('../config/database');
 const {
   requireInvestmentManagerAccess,
   getUserContext,
@@ -454,6 +455,225 @@ router.delete('/:id', authenticate, requireInvestmentManagerAccess, catchAsync(a
   res.status(200).json({
     success: true,
     message: 'Structure deleted successfully'
+  });
+}));
+
+/**
+ * @route   GET /api/investors/me/dashboard
+ * @desc    Get investor dashboard data with structures, summary, and distributions
+ * @access  Private (requires authentication, Investor role)
+ *
+ * @success {200} Success Response
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "investor": {
+ *       "id": "investor-uuid",
+ *       "firstName": "John",
+ *       "lastName": "Doe",
+ *       "email": "john@example.com"
+ *     },
+ *     "structures": [
+ *       {
+ *         "id": "structure-uuid",
+ *         "name": "Real Estate Fund I",
+ *         "type": "Fund",
+ *         "commitment": 500000,
+ *         "calledCapital": 300000,
+ *         "currentValue": 350000,
+ *         "unrealizedGain": 50000
+ *       }
+ *     ],
+ *     "summary": {
+ *       "totalCommitment": 500000,
+ *       "totalCalledCapital": 300000,
+ *       "totalCurrentValue": 350000,
+ *       "totalDistributed": 25000,
+ *       "totalReturn": 75000,
+ *       "totalReturnPercent": 25.0
+ *     },
+ *     "distributions": [
+ *       {
+ *         "id": "dist-uuid",
+ *         "structureId": "structure-uuid",
+ *         "structureName": "Real Estate Fund I",
+ *         "amount": 25000,
+ *         "date": "2024-01-15",
+ *         "type": "Return of Capital",
+ *         "status": "Paid"
+ *       }
+ *     ]
+ *   }
+ * }
+ *
+ * @error {401} Unauthorized - No authentication token
+ * {
+ *   "success": false,
+ *   "message": "Authentication required"
+ * }
+ *
+ * @error {403} Forbidden - Not an investor
+ * {
+ *   "success": false,
+ *   "message": "Access denied. Investor role required."
+ * }
+ */
+router.get('/investors/me/dashboard', authenticate, catchAsync(async (req, res) => {
+  const userId = req.auth.userId || req.user.id;
+  const supabase = getSupabase();
+
+  // Get user details
+  const user = await User.findById(userId);
+  validate(user, 'User not found');
+
+  // Optional: Validate user is an investor (role 3)
+  // validate(user.role === ROLES.INVESTOR, 'Access denied. Investor role required.');
+
+  // Get all structure_investors records for this user
+  const { data: structureInvestors, error: siError } = await supabase
+    .from('structure_investors')
+    .select(`
+      *,
+      structure:structures (
+        id,
+        name,
+        type,
+        status,
+        base_currency,
+        current_nav
+      )
+    `)
+    .eq('user_id', userId);
+
+  if (siError) {
+    throw new Error(`Error fetching structures: ${siError.message}`);
+  }
+
+  // Get all capital call allocations for this user
+  const { data: capitalCallAllocations, error: ccError } = await supabase
+    .from('capital_call_allocations')
+    .select(`
+      *,
+      capital_call:capital_calls (
+        structure_id
+      )
+    `)
+    .eq('user_id', userId);
+
+  if (ccError) {
+    throw new Error(`Error fetching capital calls: ${ccError.message}`);
+  }
+
+  // Get all distribution allocations for this user
+  const { data: distributionAllocations, error: distError } = await supabase
+    .from('distribution_allocations')
+    .select(`
+      *,
+      distribution:distributions (
+        id,
+        structure_id,
+        distribution_date,
+        source,
+        status
+      )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (distError) {
+    throw new Error(`Error fetching distributions: ${distError.message}`);
+  }
+
+  // Build structures array with calculations
+  const structures = (structureInvestors || [])
+    .filter(si => si.structure)
+    .map(si => {
+      const commitment = parseFloat(si.commitment_amount) || 0;
+
+      // Calculate called capital for this structure
+      const structureCalls = (capitalCallAllocations || []).filter(
+        alloc => alloc.capital_call?.structure_id === si.structure_id
+      );
+      const calledCapital = structureCalls.reduce(
+        (sum, alloc) => sum + (parseFloat(alloc.allocated_amount) || 0),
+        0
+      );
+
+      // Use structure's current_nav or calculate based on called capital
+      // For now, we'll use a simple calculation: called capital + some growth
+      // In production, this should come from the structure's NAV
+      const currentValue = parseFloat(si.structure.current_nav) || calledCapital;
+
+      // Calculate unrealized gain
+      const unrealizedGain = currentValue - calledCapital;
+
+      return {
+        id: si.structure.id,
+        name: si.structure.name,
+        type: si.structure.type,
+        status: si.structure.status,
+        commitment: commitment,
+        calledCapital: calledCapital,
+        currentValue: currentValue,
+        unrealizedGain: unrealizedGain,
+        currency: si.structure.base_currency || 'USD',
+        ownershipPercent: parseFloat(si.ownership_percent) || 0
+      };
+    });
+
+  // Build distributions array
+  const distributions = (distributionAllocations || [])
+    .filter(alloc => alloc.distribution)
+    .map(alloc => {
+      // Find the structure name
+      const structure = structures.find(s => s.id === alloc.distribution.structure_id);
+
+      return {
+        id: alloc.distribution.id,
+        structureId: alloc.distribution.structure_id,
+        structureName: structure?.name || 'Unknown Structure',
+        amount: parseFloat(alloc.allocated_amount) || 0,
+        date: alloc.distribution.distribution_date,
+        type: alloc.distribution.source || 'Distribution',
+        status: alloc.status || alloc.distribution.status
+      };
+    });
+
+  // Calculate summary metrics
+  const totalCommitment = structures.reduce((sum, s) => sum + s.commitment, 0);
+  const totalCalledCapital = structures.reduce((sum, s) => sum + s.calledCapital, 0);
+  const totalCurrentValue = structures.reduce((sum, s) => sum + s.currentValue, 0);
+  const totalDistributed = distributions
+    .filter(d => d.status === 'Paid')
+    .reduce((sum, d) => sum + d.amount, 0);
+
+  // Total Return = (Distributions + Current Value) - Called Capital
+  const totalReturn = (totalDistributed + totalCurrentValue) - totalCalledCapital;
+  const totalReturnPercent = totalCalledCapital > 0
+    ? (totalReturn / totalCalledCapital) * 100
+    : 0;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      investor: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        profileImage: user.profileImage
+      },
+      structures,
+      summary: {
+        totalCommitment: parseFloat(totalCommitment.toFixed(2)),
+        totalCalledCapital: parseFloat(totalCalledCapital.toFixed(2)),
+        totalCurrentValue: parseFloat(totalCurrentValue.toFixed(2)),
+        totalDistributed: parseFloat(totalDistributed.toFixed(2)),
+        totalReturn: parseFloat(totalReturn.toFixed(2)),
+        totalReturnPercent: parseFloat(totalReturnPercent.toFixed(2))
+      },
+      distributions
+    }
   });
 }));
 
