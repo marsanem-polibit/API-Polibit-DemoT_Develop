@@ -709,6 +709,14 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
   if (newPassword) {
     validate(oldPassword, 'oldPassword is required when updating password');
 
+    // Check if new password is the same as old password
+    if (newPassword === oldPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be different from current password'
+      });
+    }
+
     // Verify old password
     const isPasswordValid = await User.comparePassword(userId, oldPassword);
     if (!isPasswordValid) {
