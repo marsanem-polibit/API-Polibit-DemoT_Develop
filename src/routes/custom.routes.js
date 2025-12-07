@@ -718,13 +718,18 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
     }
 
     // Verify old password using Supabase Auth
-    const supabase = getSupabase();
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+    // Create client for authentication
+    const authClient = createClient(supabaseUrl, supabaseKey);
+    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
       email: user.email,
       password: oldPassword
     });
 
-    if (authError || !authData.user) {
+    if (authError || !authData.user || !authData.session) {
       return res.status(401).json({
         success: false,
         message: 'Current password is incorrect'
@@ -739,15 +744,17 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
       });
     }
 
-    // Update password in Supabase Auth
-    const { error: updateAuthError } = await supabase.auth.updateUser({
+    // Update password in Supabase Auth using the authenticated session
+    const { error: updateAuthError } = await authClient.auth.updateUser({
       password: newPassword
     });
 
     if (updateAuthError) {
+      console.error('Supabase Auth password update error:', updateAuthError);
       return res.status(500).json({
         success: false,
-        message: 'Failed to update password in authentication system'
+        message: 'Failed to update password in authentication system',
+        debug: process.env.NODE_ENV === 'development' ? updateAuthError.message : undefined
       });
     }
 
