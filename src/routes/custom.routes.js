@@ -717,9 +717,14 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
       });
     }
 
-    // Verify old password
-    const isPasswordValid = await User.comparePassword(userId, oldPassword);
-    if (!isPasswordValid) {
+    // Verify old password using Supabase Auth
+    const supabase = getSupabase();
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: oldPassword
+    });
+
+    if (authError || !authData.user) {
       return res.status(401).json({
         success: false,
         message: 'Current password is incorrect'
@@ -734,7 +739,19 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
       });
     }
 
-    // Add password to update (will be hashed by the model)
+    // Update password in Supabase Auth
+    const { error: updateAuthError } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    if (updateAuthError) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update password in authentication system'
+      });
+    }
+
+    // Also update in users table for backward compatibility
     updateData.password = newPassword;
   }
 
