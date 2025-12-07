@@ -720,16 +720,17 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
     // Verify old password using Supabase Auth
     const { createClient } = require('@supabase/supabase-js');
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Create client for authentication
-    const authClient = createClient(supabaseUrl, supabaseKey);
+    // Create client for password verification
+    const authClient = createClient(supabaseUrl, supabaseAnonKey);
     const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
       email: user.email,
       password: oldPassword
     });
 
-    if (authError || !authData.user || !authData.session) {
+    if (authError || !authData.user) {
       return res.status(401).json({
         success: false,
         message: 'Current password is incorrect'
@@ -744,10 +745,19 @@ router.put('/user/profile', authenticate, catchAsync(async (req, res) => {
       });
     }
 
-    // Update password in Supabase Auth using the authenticated session
-    const { error: updateAuthError } = await authClient.auth.updateUser({
-      password: newPassword
+    // Update password using service role key to bypass MFA requirement
+    // User has already verified their identity with old password
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     });
+
+    const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { password: newPassword }
+    );
 
     if (updateAuthError) {
       console.error('Supabase Auth password update error:', updateAuthError);
