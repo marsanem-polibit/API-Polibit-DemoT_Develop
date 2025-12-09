@@ -45,6 +45,11 @@ class Structure {
       targetReturns: 'target_returns',
       riskProfile: 'risk_profile',
       stage: 'stage',
+      performanceFee: 'performance_fee',
+      preferredReturn: 'preferred_return',
+      plannedInvestments: 'planned_investments',
+      investors: 'investors',
+      bannerImage: 'banner_image',
       createdBy: 'created_by',
       createdAt: 'created_at',
       updatedAt: 'updated_at'
@@ -99,6 +104,11 @@ class Structure {
       targetReturns: dbData.target_returns,
       riskProfile: dbData.risk_profile,
       stage: dbData.stage,
+      performanceFee: dbData.performance_fee,
+      preferredReturn: dbData.preferred_return,
+      plannedInvestments: dbData.planned_investments,
+      investors: dbData.investors,
+      bannerImage: dbData.banner_image,
       createdBy: dbData.created_by,
       createdAt: dbData.created_at,
       updatedAt: dbData.updated_at

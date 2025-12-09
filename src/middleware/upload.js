@@ -280,6 +280,44 @@ const handleChatAttachmentUpload = (req, res, next) => {
   });
 };
 
+// Configure storage for structure banner images (use memory storage for Supabase)
+const structureBannerStorage = multer.memoryStorage();
+
+// Configure multer for structure banner image upload
+const uploadStructureBanner = multer({
+  storage: structureBannerStorage,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max file size
+  }
+});
+
+// Middleware to handle structure banner upload with error handling
+const handleStructureBannerUpload = (req, res, next) => {
+  const upload = uploadStructureBanner.single('bannerImage');
+
+  upload(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          message: 'File too large. Maximum file size is 5MB'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: `Upload error: ${err.message}`
+      });
+    } else if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message
+      });
+    }
+    next();
+  });
+};
+
 module.exports = {
   uploadProfileImage,
   deleteOldProfileImage,
@@ -290,5 +328,7 @@ module.exports = {
   uploadDocument,
   handleDocumentUpload,
   uploadChatAttachment,
-  handleChatAttachmentUpload
+  handleChatAttachmentUpload,
+  uploadStructureBanner,
+  handleStructureBannerUpload
 };

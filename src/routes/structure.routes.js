@@ -14,15 +14,17 @@ const {
   canEditStructure,
   getUserStructureIds
 } = require('../middleware/rbac');
+const { handleStructureBannerUpload } = require('../middleware/upload');
+const { uploadToSupabase } = require('../utils/fileUpload');
 
 const router = express.Router();
 
 /**
  * @route   POST /api/structures
- * @desc    Create a new structure
+ * @desc    Create a new structure (with optional banner image)
  * @access  Private (requires authentication, Root/Admin only)
  */
-router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async (req, res) => {
+router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBannerUpload, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
 
   const {
@@ -52,7 +54,11 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     investmentStrategy,
     targetReturns,
     riskProfile,
-    stage
+    stage,
+    performanceFee,
+    preferredReturn,
+    plannedInvestments,
+    investors
   } = req.body;
 
   // Validate required fields
@@ -70,6 +76,19 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     validate(parentStructure, 'Parent structure not found');
     validate(parentStructure.createdBy === userId, 'Parent structure does not belong to user');
     validate(parentStructure.hierarchyLevel < 5, 'Maximum hierarchy level (5) reached');
+  }
+
+  // Handle banner image upload if provided
+  let bannerImageUrl = null;
+  if (req.file) {
+    try {
+      const fileName = `structure-banner-${userId}-${Date.now()}.${req.file.mimetype.split('/')[1]}`;
+      bannerImageUrl = await uploadToSupabase(req.file.buffer, fileName, 'structure-banners', req.file.mimetype);
+      console.log('Banner image uploaded to Supabase:', bannerImageUrl);
+    } catch (error) {
+      console.error('Error uploading banner image:', error);
+      // Continue without banner image if upload fails
+    }
   }
 
   // Create structure
@@ -105,6 +124,11 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     targetReturns: targetReturns?.trim() || '',
     riskProfile: riskProfile?.trim() || '',
     stage: stage?.trim() || '',
+    performanceFee: performanceFee?.trim() || '',
+    preferredReturn: preferredReturn?.trim() || '',
+    plannedInvestments: plannedInvestments?.trim() || '',
+    investors: investors || 0,
+    bannerImage: bannerImageUrl || '',
     createdBy: userId
   };
 
@@ -264,7 +288,8 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, catchAsync(asyn
     'extensionYears', 'finalDate', 'gp', 'fundAdmin', 'legalCounsel',
     'auditor', 'taxAdvisor', 'bankAccounts', 'baseCurrency',
     'taxJurisdiction', 'regulatoryStatus', 'investmentStrategy',
-    'targetReturns', 'riskProfile', 'stage'
+    'targetReturns', 'riskProfile', 'stage', 'performanceFee',
+    'preferredReturn', 'plannedInvestments', 'investors', 'bannerImage'
   ];
 
   for (const field of allowedFields) {
