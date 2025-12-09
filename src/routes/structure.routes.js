@@ -83,7 +83,8 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
   if (req.file) {
     try {
       const fileName = `structure-banner-${userId}-${Date.now()}.${req.file.mimetype.split('/')[1]}`;
-      bannerImageUrl = await uploadToSupabase(req.file.buffer, fileName, 'structure-banners', req.file.mimetype);
+      const uploadResult = await uploadToSupabase(req.file.buffer, fileName, req.file.mimetype, 'image/jpeg', 'structure-banners');
+      bannerImageUrl = uploadResult.publicUrl;
       console.log('Banner image uploaded to Supabase:', bannerImageUrl);
     } catch (error) {
       console.error('Error uploading banner image:', error);
@@ -285,7 +286,8 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, handleStructure
   if (req.file) {
     try {
       const fileName = `structure-banner-${userId}-${Date.now()}.${req.file.mimetype.split('/')[1]}`;
-      bannerImageUrl = await uploadToSupabase(req.file.buffer, fileName, 'structure-banners', req.file.mimetype);
+      const uploadResult = await uploadToSupabase(req.file.buffer, fileName, req.file.mimetype, 'image/jpeg', 'structure-banners');
+      bannerImageUrl = uploadResult.publicUrl;
       console.log('Banner image uploaded to Supabase:', bannerImageUrl);
     } catch (error) {
       console.error('Error uploading banner image:', error);
@@ -315,9 +317,14 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, handleStructure
     updateData.bannerImage = bannerImageUrl;
   }
 
-  validate(Object.keys(updateData).length > 0, 'No valid fields provided for update');
-
-  const updatedStructure = await Structure.findByIdAndUpdate(id, updateData);
+  // Only update if there are fields to update
+  let updatedStructure;
+  if (Object.keys(updateData).length > 0) {
+    updatedStructure = await Structure.findByIdAndUpdate(id, updateData);
+  } else {
+    // No updates provided, return existing structure
+    updatedStructure = structure;
+  }
 
   res.status(200).json({
     success: true,

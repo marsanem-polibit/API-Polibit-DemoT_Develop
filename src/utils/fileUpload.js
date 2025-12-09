@@ -30,9 +30,10 @@ const getStorageClient = () => {
  * @param {string} originalName - Original file name
  * @param {string} mimeType - File MIME type
  * @param {string} folder - Folder path in storage (e.g., 'documents', 'invoices')
+ * @param {string} bucket - Bucket name (e.g., 'documents', 'structure-banners')
  * @returns {Object} - Upload result with public URL
  */
-async function uploadToSupabase(fileBuffer, originalName, mimeType, folder = 'documents') {
+async function uploadToSupabase(fileBuffer, originalName, mimeType, folder = 'documents', bucket = 'documents') {
   const supabase = getStorageClient();
 
   // Generate unique filename with timestamp
@@ -44,8 +45,8 @@ async function uploadToSupabase(fileBuffer, originalName, mimeType, folder = 'do
   const filePath = `${folder}/${fileName}`;
 
   // Upload file to Supabase Storage
-  const { data, error } = await supabase.storage
-    .from('documents') // Bucket name
+  const { error } = await supabase.storage
+    .from(bucket) // Use dynamic bucket name
     .upload(filePath, fileBuffer, {
       contentType: mimeType,
       upsert: false
@@ -57,7 +58,7 @@ async function uploadToSupabase(fileBuffer, originalName, mimeType, folder = 'do
 
   // Get public URL
   const { data: { publicUrl } } = supabase.storage
-    .from('documents')
+    .from(bucket)
     .getPublicUrl(filePath);
 
   return {
