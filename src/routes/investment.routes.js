@@ -21,16 +21,36 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
   const {
     structureId,
     projectId,
+    name,
     investmentName,
+    description,
     investmentType,
+    type,
     investmentDate,
+    originationDate,
+    fundId,
+    fundCommitment,
     // Equity fields
     equityInvested,
+    ownershipPercentage,
     equityOwnershipPercent,
+    currentEquityValue,
+    unrealizedGain,
     // Debt fields
     principalProvided,
     interestRate,
     maturityDate,
+    accruedInterest,
+    currentDebtValue,
+    // Performance metrics
+    irr,
+    multiple,
+    currentValue,
+    totalInvested,
+    totalInvestmentSize,
+    lastValuationDate,
+    // Property specific
+    totalPropertyValue,
     // Additional info
     sector,
     geography,
@@ -63,16 +83,25 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
   const investmentData = {
     structureId,
     projectId: projectId || null,
-    investmentName: investmentName.trim(),
+    name: name?.trim() || investmentName?.trim() || '',
+    investmentName: investmentName?.trim() || name?.trim() || '',
+    description: description?.trim() || '',
     investmentType,
+    type: type?.trim() || '',
     investmentDate: investmentDate || new Date().toISOString(),
+    originationDate: originationDate || investmentDate || new Date().toISOString(),
     status: 'Active',
+    fundId: fundId || null,
+    fundCommitment: fundCommitment || 0,
     // Equity fields
     equityInvested: equityInvested || null,
-    equityOwnershipPercent: equityOwnershipPercent || null,
-    equityCurrentValue: equityInvested || null,
+    ownershipPercentage: ownershipPercentage || equityOwnershipPercent || null,
+    equityOwnershipPercent: equityOwnershipPercent || ownershipPercentage || null,
+    currentEquityValue: currentEquityValue || equityInvested || null,
+    equityCurrentValue: equityInvested || currentEquityValue || null,
     equityExitValue: null,
     equityRealizedGain: null,
+    unrealizedGain: unrealizedGain || 0,
     // Debt fields
     principalProvided: principalProvided || null,
     interestRate: interestRate || null,
@@ -80,10 +109,20 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     principalRepaid: 0,
     interestReceived: 0,
     outstandingPrincipal: principalProvided || null,
+    accruedInterest: accruedInterest || 0,
+    currentDebtValue: currentDebtValue || 0,
     // Performance metrics
-    irrPercent: null,
-    moic: null,
+    irr: irr || 0,
+    irrPercent: irr || 0,
+    multiple: multiple || 0,
+    moic: multiple || 0,
     totalReturns: 0,
+    currentValue: currentValue || 0,
+    totalInvested: totalInvested || 0,
+    totalInvestmentSize: totalInvestmentSize || 0,
+    lastValuationDate: lastValuationDate || null,
+    // Property specific
+    totalPropertyValue: totalPropertyValue || 0,
     // Additional info
     sector: sector?.trim() || '',
     geography: geography?.trim() || '',
@@ -223,9 +262,20 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, catchAsync(asyn
 
   const updateData = {};
   const allowedFields = [
-    'investmentName', 'status', 'equityInvested', 'equityOwnershipPercent',
-    'equityCurrentValue', 'principalProvided', 'interestRate', 'maturityDate',
-    'principalRepaid', 'interestReceived', 'outstandingPrincipal',
+    'name', 'investmentName', 'description', 'investmentType', 'type', 'investmentDate',
+    'originationDate', 'status', 'fundId', 'fundCommitment',
+    // Equity fields
+    'equityInvested', 'ownershipPercentage', 'equityOwnershipPercent',
+    'currentEquityValue', 'equityCurrentValue', 'unrealizedGain',
+    // Debt fields
+    'principalProvided', 'interestRate', 'maturityDate', 'principalRepaid',
+    'interestReceived', 'outstandingPrincipal', 'accruedInterest', 'currentDebtValue',
+    // Performance metrics
+    'irr', 'irrPercent', 'multiple', 'moic', 'totalReturns', 'currentValue',
+    'totalInvested', 'totalInvestmentSize', 'lastValuationDate',
+    // Property specific
+    'totalPropertyValue',
+    // Additional info
     'sector', 'geography', 'currency', 'notes'
   ];
 
