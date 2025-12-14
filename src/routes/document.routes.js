@@ -163,7 +163,7 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
 
 /**
  * @route   GET /api/documents/all
- * @desc    Get all documents with role-based filtering
+ * @desc    Get all documents with role-based filtering and entity data
  * @access  Private (requires authentication, Root/Admin only)
  * @note    Root users see all documents, Admin users see only their own
  */
@@ -186,10 +186,44 @@ router.get('/all', authenticate, requireInvestmentManagerAccess, catchAsync(asyn
 
   const documents = await Document.find(filter);
 
+  // Fetch entity data for each document
+  const documentsWithEntities = await Promise.all(
+    documents.map(async (doc) => {
+      let entity = null;
+
+      try {
+        switch (doc.entityType) {
+          case 'Structure':
+            entity = await Structure.findById(doc.entityId);
+            break;
+          case 'Investor':
+            entity = await User.findById(doc.entityId);
+            break;
+          case 'Investment':
+            entity = await Investment.findById(doc.entityId);
+            break;
+          case 'CapitalCall':
+            entity = await CapitalCall.findById(doc.entityId);
+            break;
+          case 'Distribution':
+            entity = await Distribution.findById(doc.entityId);
+            break;
+        }
+      } catch (error) {
+        console.error(`Error fetching entity for document ${doc.id}:`, error.message);
+      }
+
+      return {
+        ...doc,
+        entity: entity || null
+      };
+    })
+  );
+
   res.status(200).json({
     success: true,
-    count: documents.length,
-    data: documents
+    count: documentsWithEntities.length,
+    data: documentsWithEntities
   });
 }));
 
