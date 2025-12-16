@@ -5,30 +5,55 @@ const smartContractSchema = new mongoose.Schema({
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
-    required: [true, 'Project ID is required'],
+    index: true
+  },
+  structureId: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  contractType: {
+    type: String,
+    required: [true, 'Contract type is required'],
+    enum: ['ERC3643', 'ERC20', 'ERC721', 'ERC1155', 'OTHER'],
+    default: 'ERC3643',
+    index: true
+  },
+  deploymentStatus: {
+    type: String,
+    required: [true, 'Deployment status is required'],
+    enum: ['pending', 'deploying', 'deployed', 'failed'],
+    default: 'pending',
     index: true
   },
   complianceRegistryAddress: {
     type: String,
-    required: [true, 'Compliance Registry Address is required'],
     trim: true
   },
   contractAddress: {
     type: String,
-    required: [true, 'Contract Address is required'],
     trim: true,
-    unique: true,
+    sparse: true,
     index: true
   },
   factoryAddress: {
     type: String,
-    required: [true, 'Factory Address is required'],
     trim: true
   },
   identityRegistryAddress: {
     type: String,
-    required: [true, 'Identity Registry Address is required'],
     trim: true
+  },
+  transactionHash: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  network: {
+    type: String,
+    trim: true,
+    default: 'polygon',
+    index: true
   },
   company: {
     type: String,
@@ -49,7 +74,6 @@ const smartContractSchema = new mongoose.Schema({
   },
   mintedTokens: {
     type: String,
-    required: [true, 'Minted tokens is required'],
     trim: true,
     default: '0'
   },
@@ -73,6 +97,18 @@ const smartContractSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Token value is required'],
     trim: true
+  },
+  deployedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true
+  },
+  deploymentError: {
+    type: String,
+    trim: true
+  },
+  deploymentResponse: {
+    type: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true // Adds createdAt and updatedAt
@@ -80,25 +116,42 @@ const smartContractSchema = new mongoose.Schema({
 
 // Index for efficient queries
 smartContractSchema.index({ projectId: 1, contractAddress: 1 });
+smartContractSchema.index({ deploymentStatus: 1, createdAt: -1 });
+smartContractSchema.index({ deployedBy: 1, deploymentStatus: 1 });
 
 // Static method to find by project ID
 smartContractSchema.statics.findByProjectId = function(projectId) {
-  return this.findOne({ projectId }).populate('projectId');
+  return this.findOne({ projectId }).populate('projectId deployedBy');
 };
 
 // Static method to find by contract address
 smartContractSchema.statics.findByContractAddress = function(contractAddress) {
-  return this.findOne({ contractAddress: contractAddress.trim() }).populate('projectId');
+  return this.findOne({ contractAddress: contractAddress.trim() }).populate('projectId deployedBy');
 };
 
 // Static method to find by company
 smartContractSchema.statics.findByCompany = function(company) {
-  return this.find({ company: { $regex: company, $options: 'i' } }).populate('projectId');
+  return this.find({ company: { $regex: company, $options: 'i' } }).populate('projectId deployedBy');
 };
 
 // Static method to find by token symbol
 smartContractSchema.statics.findByTokenSymbol = function(tokenSymbol) {
-  return this.find({ tokenSymbol: tokenSymbol.toUpperCase() }).populate('projectId');
+  return this.find({ tokenSymbol: tokenSymbol.toUpperCase() }).populate('projectId deployedBy');
+};
+
+// Static method to find by deployment status
+smartContractSchema.statics.findByDeploymentStatus = function(status) {
+  return this.find({ deploymentStatus: status }).populate('projectId deployedBy').sort({ createdAt: -1 });
+};
+
+// Static method to find by deployed user
+smartContractSchema.statics.findByDeployedUser = function(userId) {
+  return this.find({ deployedBy: userId }).populate('projectId').sort({ createdAt: -1 });
+};
+
+// Static method to find by contract type
+smartContractSchema.statics.findByContractType = function(contractType) {
+  return this.find({ contractType }).populate('projectId deployedBy').sort({ createdAt: -1 });
 };
 
 // Instance method to update minted tokens
@@ -126,6 +179,33 @@ smartContractSchema.methods.getMintingProgress = function() {
 smartContractSchema.methods.canMintMore = function() {
   const minted = parseInt(this.mintedTokens, 10);
   return minted < this.maxTokens;
+};
+
+// Instance method to mark as deployed
+smartContractSchema.methods.markAsDeployed = function(deploymentData) {
+  this.deploymentStatus = 'deployed';
+  if (deploymentData) {
+    if (deploymentData.contractAddress) this.contractAddress = deploymentData.contractAddress;
+    if (deploymentData.transactionHash) this.transactionHash = deploymentData.transactionHash;
+    if (deploymentData.complianceRegistryAddress) this.complianceRegistryAddress = deploymentData.complianceRegistryAddress;
+    if (deploymentData.factoryAddress) this.factoryAddress = deploymentData.factoryAddress;
+    if (deploymentData.identityRegistryAddress) this.identityRegistryAddress = deploymentData.identityRegistryAddress;
+    this.deploymentResponse = deploymentData;
+  }
+  return this.save();
+};
+
+// Instance method to mark as failed
+smartContractSchema.methods.markAsFailed = function(error) {
+  this.deploymentStatus = 'failed';
+  this.deploymentError = error;
+  return this.save();
+};
+
+// Instance method to mark as deploying
+smartContractSchema.methods.markAsDeploying = function() {
+  this.deploymentStatus = 'deploying';
+  return this.save();
 };
 
 // Virtual for checking if contract is fully minted

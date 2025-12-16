@@ -11,6 +11,7 @@ const {
   catchAsync,
   validate
 } = require('../middleware/errorHandler');
+const SmartContract = require('../models/smartContract');
 
 const router = express.Router();
 
@@ -2831,13 +2832,16 @@ router.post('/contract/force-transfer-tokens', requireApiKey, requireBearerToken
  */
 router.post('/deploy/erc3643', requireApiKey, requireBearerToken, catchAsync(async (req, res) => {
   const {
+    structureId,
     contractTokenName,
     contractTokenSymbol,
     contractTokenValue,
     contractMaxTokens,
     company,
     currency,
-    projectName
+    projectName,
+    projectId,
+    network
   } = req.body;
 
   // Validate required fields
@@ -2849,23 +2853,60 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, catchAsync(asy
   validate(currency, 'currency is required');
   validate(projectName, 'projectName is required');
 
-  const context = { auth: req.auth };
-  const result = await apiManager.deployContractERC3643(context, req.body);
-
-  if (result.error) {
-    return res.status(result.statusCode || 500).json({
-      error: result.error,
-      message: 'Failed to deploy ERC3643 contract',
-      details: result.body,
-    });
-  }
-
-  res.status(result.statusCode || 200).json({
-    success: true,
-    message: 'ERC3643 contract deployment initiated',
+  // Create smart contract record in database
+  const smartContract = new SmartContract({
+    structureId,
+    projectId,
     contractType: 'ERC3643',
-    data: result.body,
+    deploymentStatus: 'deploying',
+    company,
+    currency,
+    maxTokens: contractMaxTokens,
+    projectName,
+    tokenName: contractTokenName,
+    tokenSymbol: contractTokenSymbol,
+    tokenValue: contractTokenValue,
+    deployedBy: req.auth?.userId || req.auth?.sub,
+    network: network || 'polygon'
   });
+
+  try {
+    // Save initial record
+    await smartContract.save();
+
+    // Deploy contract
+    const context = { auth: req.auth };
+    const result = await apiManager.deployContractERC3643(context, req.body);
+
+    if (result.error) {
+      // Mark as failed
+      await smartContract.markAsFailed(result.error);
+
+      return res.status(result.statusCode || 500).json({
+        error: result.error,
+        message: 'Failed to deploy ERC3643 contract',
+        details: result.body,
+        contractId: smartContract._id
+      });
+    }
+
+    // Update with deployment result
+    await smartContract.markAsDeployed(result.body);
+
+    res.status(result.statusCode || 200).json({
+      success: true,
+      message: 'ERC3643 contract deployment initiated',
+      contractType: 'ERC3643',
+      contractId: smartContract._id,
+      data: result.body,
+    });
+  } catch (error) {
+    // If we have a smart contract ID, mark it as failed
+    if (smartContract._id) {
+      await smartContract.markAsFailed(error.message);
+    }
+    throw error;
+  }
 }));
 
 /**
