@@ -85,7 +85,22 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     dissolution,
     disputesResolution,
     governingLaw,
-    additionalProvisions
+    additionalProvisions,
+    minimumTicket,
+    maximumTicket,
+    strategyInstrumentType,
+    localBankName,
+    localAccountBank,
+    localRoutingBank,
+    localAccountHolder,
+    localBankAddress,
+    internationalBankName,
+    internationalAccountBank,
+    internationalSwift,
+    internationalHolderName,
+    internationalBankAddress,
+    blockchainNetwork,
+    walletAddress
   } = req.body;
 
   // Validate required fields
@@ -184,6 +199,21 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     disputesResolution: disputesResolution?.trim() || '',
     governingLaw: governingLaw?.trim() || '',
     additionalProvisions: additionalProvisions?.trim() || '',
+    minimumTicket: minimumTicket || null,
+    maximumTicket: maximumTicket || null,
+    strategyInstrumentType: strategyInstrumentType?.trim() || '',
+    localBankName: localBankName?.trim() || '',
+    localAccountBank: localAccountBank?.trim() || '',
+    localRoutingBank: localRoutingBank?.trim() || '',
+    localAccountHolder: localAccountHolder?.trim() || '',
+    localBankAddress: localBankAddress?.trim() || '',
+    internationalBankName: internationalBankName?.trim() || '',
+    internationalAccountBank: internationalAccountBank?.trim() || '',
+    internationalSwift: internationalSwift?.trim() || '',
+    internationalHolderName: internationalHolderName?.trim() || '',
+    internationalBankAddress: internationalBankAddress?.trim() || '',
+    blockchainNetwork: blockchainNetwork?.trim() || '',
+    walletAddress: walletAddress?.trim() || '',
     createdBy: userId
   };
 
@@ -366,7 +396,11 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, handleStructure
     'additionalCommunications', 'limitedLiability', 'exceptionsLiability',
     'maximumExposure', 'indemnifiesPartnership', 'lpIndemnifiesPartnership',
     'indemnifiesProcedures', 'amendments', 'dissolution', 'disputesResolution',
-    'governingLaw', 'additionalProvisions'
+    'governingLaw', 'additionalProvisions', 'minimumTicket', 'maximumTicket',
+    'strategyInstrumentType', 'localBankName', 'localAccountBank', 'localRoutingBank',
+    'localAccountHolder', 'localBankAddress', 'internationalBankName',
+    'internationalAccountBank', 'internationalSwift', 'internationalHolderName',
+    'internationalBankAddress', 'blockchainNetwork', 'walletAddress'
   ];
 
   for (const field of allowedFields) {
