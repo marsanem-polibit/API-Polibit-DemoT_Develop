@@ -120,6 +120,15 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     validate(parentStructure.hierarchyLevel < 5, 'Maximum hierarchy level (5) reached');
   }
 
+  // Helper function to sanitize numeric values (handles string "null")
+  const sanitizeNumber = (value, defaultValue = null) => {
+    if (value === null || value === undefined || value === 'null' || value === '') {
+      return defaultValue;
+    }
+    const num = Number(value);
+    return isNaN(num) ? defaultValue : num;
+  };
+
   // Handle banner image upload if provided
   let bannerImageUrl = null;
   if (req.file) {
@@ -143,17 +152,17 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     status: status || 'Active',
     parentStructureId: parentStructureId || null,
     hierarchyLevel: parentStructureId ? null : 1, // Will be calculated by DB trigger
-    totalCommitment: totalCommitment || 0,
+    totalCommitment: sanitizeNumber(totalCommitment, 0),
     totalCalled: 0,
     totalDistributed: 0,
     totalInvested: 0,
-    managementFee: managementFee || 2.0,
-    carriedInterest: carriedInterest || 20.0,
-    hurdleRate: hurdleRate || 8.0,
+    managementFee: sanitizeNumber(managementFee, 2.0),
+    carriedInterest: sanitizeNumber(carriedInterest, 20.0),
+    hurdleRate: sanitizeNumber(hurdleRate, 8.0),
     waterfallType: waterfallType || 'American',
     inceptionDate: inceptionDate || new Date().toISOString(),
-    termYears: termYears || 10,
-    extensionYears: extensionYears || 2,
+    termYears: sanitizeNumber(termYears, 10),
+    extensionYears: sanitizeNumber(extensionYears, 2),
     gp: gp?.trim() || '',
     fundAdmin: fundAdmin?.trim() || '',
     legalCounsel: legalCounsel?.trim() || '',
@@ -167,10 +176,10 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     targetReturns: targetReturns?.trim() || '',
     riskProfile: riskProfile?.trim() || '',
     stage: stage?.trim() || '',
-    performanceFee: performanceFee?.trim() || '',
-    preferredReturn: preferredReturn?.trim() || '',
-    plannedInvestments: plannedInvestments?.trim() || '',
-    investors: investors || 0,
+    performanceFee: sanitizeNumber(performanceFee, null),
+    preferredReturn: sanitizeNumber(preferredReturn, null),
+    plannedInvestments: sanitizeNumber(plannedInvestments, null),
+    investors: sanitizeNumber(investors, 0),
     bannerImage: bannerImageUrl || '',
     managementControl: managementControl?.trim() || '',
     capitalContributions: capitalContributions?.trim() || '',
@@ -199,8 +208,8 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     disputesResolution: disputesResolution?.trim() || '',
     governingLaw: governingLaw?.trim() || '',
     additionalProvisions: additionalProvisions?.trim() || '',
-    minimumTicket: minimumTicket || null,
-    maximumTicket: maximumTicket || null,
+    minimumTicket: sanitizeNumber(minimumTicket, null),
+    maximumTicket: sanitizeNumber(maximumTicket, null),
     strategyInstrumentType: strategyInstrumentType?.trim() || '',
     localBankName: localBankName?.trim() || '',
     localAccountBank: localAccountBank?.trim() || '',
