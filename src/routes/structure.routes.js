@@ -101,7 +101,9 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     internationalHolderName,
     internationalBankAddress,
     blockchainNetwork,
-    walletAddress
+    walletAddress,
+    debtGrossInterestRate,
+    debtInterestRate
   } = req.body;
 
   // Validate required fields
@@ -225,6 +227,8 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     internationalBankAddress: internationalBankAddress?.trim() || '',
     blockchainNetwork: blockchainNetwork?.trim() || '',
     walletAddress: walletAddress?.trim() || '',
+    debtGrossInterestRate: debtGrossInterestRate?.trim() || '',
+    debtInterestRate: debtInterestRate?.trim() || '',
     createdBy: userId
   };
 
@@ -411,7 +415,8 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, handleStructure
     'strategyInstrumentType', 'localBankName', 'localAccountBank', 'localRoutingBank',
     'localAccountHolder', 'localBankAddress', 'internationalBankName',
     'internationalAccountBank', 'internationalSwift', 'internationalHolderName',
-    'internationalBankAddress', 'blockchainNetwork', 'walletAddress'
+    'internationalBankAddress', 'blockchainNetwork', 'walletAddress',
+    'debtGrossInterestRate', 'debtInterestRate'
   ];
 
   for (const field of allowedFields) {

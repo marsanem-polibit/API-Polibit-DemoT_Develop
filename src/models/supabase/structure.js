@@ -93,6 +93,8 @@ class Structure {
       internationalBankAddress: 'international_bank_address',
       blockchainNetwork: 'blockchain_network',
       walletAddress: 'wallet_address',
+      debtGrossInterestRate: 'debt_gross_interest_rate',
+      debtInterestRate: 'debt_interest_rate',
       createdBy: 'created_by',
       createdAt: 'created_at',
       updatedAt: 'updated_at'
@@ -195,6 +197,8 @@ class Structure {
       internationalBankAddress: dbData.international_bank_address,
       blockchainNetwork: dbData.blockchain_network,
       walletAddress: dbData.wallet_address,
+      debtGrossInterestRate: dbData.debt_gross_interest_rate,
+      debtInterestRate: dbData.debt_interest_rate,
       createdBy: dbData.created_by,
       createdAt: dbData.created_at,
       updatedAt: dbData.updated_at
