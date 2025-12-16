@@ -94,8 +94,7 @@ const smartContractSchema = new mongoose.Schema({
     trim: true
   },
   deployedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     index: true
   },
   deploymentError: {
@@ -116,22 +115,22 @@ smartContractSchema.index({ deployedBy: 1, deploymentStatus: 1 });
 
 // Static method to find by contract address
 smartContractSchema.statics.findByContractAddress = function(contractAddress) {
-  return this.findOne({ contractAddress: contractAddress.trim() }).populate('deployedBy');
+  return this.findOne({ contractAddress: contractAddress.trim() });
 };
 
 // Static method to find by company
 smartContractSchema.statics.findByCompany = function(company) {
-  return this.find({ company: { $regex: company, $options: 'i' } }).populate('deployedBy');
+  return this.find({ company: { $regex: company, $options: 'i' } });
 };
 
 // Static method to find by token symbol
 smartContractSchema.statics.findByTokenSymbol = function(tokenSymbol) {
-  return this.find({ tokenSymbol: tokenSymbol.toUpperCase() }).populate('deployedBy');
+  return this.find({ tokenSymbol: tokenSymbol.toUpperCase() });
 };
 
 // Static method to find by deployment status
 smartContractSchema.statics.findByDeploymentStatus = function(status) {
-  return this.find({ deploymentStatus: status }).populate('deployedBy').sort({ createdAt: -1 });
+  return this.find({ deploymentStatus: status }).sort({ createdAt: -1 });
 };
 
 // Static method to find by deployed user
@@ -141,7 +140,7 @@ smartContractSchema.statics.findByDeployedUser = function(userId) {
 
 // Static method to find by contract type
 smartContractSchema.statics.findByContractType = function(contractType) {
-  return this.find({ contractType }).populate('deployedBy').sort({ createdAt: -1 });
+  return this.find({ contractType }).sort({ createdAt: -1 });
 };
 
 // Instance method to update minted tokens
