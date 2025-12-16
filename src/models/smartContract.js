@@ -2,11 +2,6 @@
 const mongoose = require('mongoose');
 
 const smartContractSchema = new mongoose.Schema({
-  projectId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project',
-    index: true
-  },
   structureId: {
     type: String,
     trim: true,
@@ -115,43 +110,38 @@ const smartContractSchema = new mongoose.Schema({
 });
 
 // Index for efficient queries
-smartContractSchema.index({ projectId: 1, contractAddress: 1 });
+smartContractSchema.index({ contractAddress: 1 });
 smartContractSchema.index({ deploymentStatus: 1, createdAt: -1 });
 smartContractSchema.index({ deployedBy: 1, deploymentStatus: 1 });
 
-// Static method to find by project ID
-smartContractSchema.statics.findByProjectId = function(projectId) {
-  return this.findOne({ projectId }).populate('projectId deployedBy');
-};
-
 // Static method to find by contract address
 smartContractSchema.statics.findByContractAddress = function(contractAddress) {
-  return this.findOne({ contractAddress: contractAddress.trim() }).populate('projectId deployedBy');
+  return this.findOne({ contractAddress: contractAddress.trim() }).populate('deployedBy');
 };
 
 // Static method to find by company
 smartContractSchema.statics.findByCompany = function(company) {
-  return this.find({ company: { $regex: company, $options: 'i' } }).populate('projectId deployedBy');
+  return this.find({ company: { $regex: company, $options: 'i' } }).populate('deployedBy');
 };
 
 // Static method to find by token symbol
 smartContractSchema.statics.findByTokenSymbol = function(tokenSymbol) {
-  return this.find({ tokenSymbol: tokenSymbol.toUpperCase() }).populate('projectId deployedBy');
+  return this.find({ tokenSymbol: tokenSymbol.toUpperCase() }).populate('deployedBy');
 };
 
 // Static method to find by deployment status
 smartContractSchema.statics.findByDeploymentStatus = function(status) {
-  return this.find({ deploymentStatus: status }).populate('projectId deployedBy').sort({ createdAt: -1 });
+  return this.find({ deploymentStatus: status }).populate('deployedBy').sort({ createdAt: -1 });
 };
 
 // Static method to find by deployed user
 smartContractSchema.statics.findByDeployedUser = function(userId) {
-  return this.find({ deployedBy: userId }).populate('projectId').sort({ createdAt: -1 });
+  return this.find({ deployedBy: userId }).sort({ createdAt: -1 });
 };
 
 // Static method to find by contract type
 smartContractSchema.statics.findByContractType = function(contractType) {
-  return this.find({ contractType }).populate('projectId deployedBy').sort({ createdAt: -1 });
+  return this.find({ contractType }).populate('deployedBy').sort({ createdAt: -1 });
 };
 
 // Instance method to update minted tokens

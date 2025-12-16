@@ -2840,7 +2840,6 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, catchAsync(asy
     company,
     currency,
     projectName,
-    projectId,
     network
   } = req.body;
 
@@ -2856,7 +2855,6 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, catchAsync(asy
   // Create smart contract record in database
   const smartContract = new SmartContract({
     structureId,
-    projectId,
     contractType: 'ERC3643',
     deploymentStatus: 'deploying',
     company,
