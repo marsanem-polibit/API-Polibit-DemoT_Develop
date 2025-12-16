@@ -74,6 +74,103 @@ router.post('/', authenticate, catchAsync(async (req, res) => {
 }));
 
 /**
+ * @route   POST /api/waterfall-tiers/bulk-create
+ * @desc    Create multiple waterfall tiers from an array
+ * @access  Private (requires authentication)
+ * @body    { structureId: string, tiers: Array<{ name, managementFee, gpSplit, irrHurdle, preferredReturn }> }
+ */
+router.post('/bulk-create', authenticate, catchAsync(async (req, res) => {
+  const userId = req.auth.userId || req.user.id;
+  const { structureId, tiers } = req.body;
+
+  // Validate required fields
+  validate(structureId, 'Structure ID is required');
+  validate(Array.isArray(tiers), 'Tiers must be an array');
+  validate(tiers.length > 0, 'At least one tier must be provided');
+  validate(tiers.length <= 4, 'Maximum 4 tiers allowed');
+
+  // Validate structure exists and belongs to user
+  const structure = await Structure.findById(structureId);
+  validate(structure, 'Structure not found');
+  validate(structure.createdBy === userId, 'Structure does not belong to user');
+
+  const createdTiers = [];
+  const errors = [];
+
+  // Process each tier
+  for (let i = 0; i < tiers.length; i++) {
+    const tier = tiers[i];
+    const tierNumber = i + 1;
+
+    try {
+      // Validate tier fields
+      validate(tier.name, `Tier ${tierNumber}: name is required`);
+      validate(tier.gpSplit !== undefined, `Tier ${tierNumber}: gpSplit is required`);
+      validate(tier.gpSplit >= 0 && tier.gpSplit <= 100, `Tier ${tierNumber}: gpSplit must be between 0 and 100`);
+
+      // Calculate LP share from GP split
+      const gpSharePercent = tier.gpSplit;
+      const lpSharePercent = 100 - gpSharePercent;
+
+      // Build description with additional fields
+      const descriptionParts = [];
+      if (tier.managementFee !== undefined) {
+        descriptionParts.push(`Management Fee: ${tier.managementFee}%`);
+      }
+      if (tier.preferredReturn !== undefined) {
+        descriptionParts.push(`Preferred Return: ${tier.preferredReturn}%`);
+      }
+
+      // Create tier data
+      const tierData = {
+        structureId,
+        tierNumber,
+        tierName: tier.name.trim(),
+        lpSharePercent,
+        gpSharePercent,
+        thresholdAmount: tier.thresholdAmount || null,
+        thresholdIrr: tier.irrHurdle || null,
+        description: descriptionParts.join(' | '),
+        isActive: tier.isActive !== undefined ? tier.isActive : true,
+        userId
+      };
+
+      // Validate tier configuration
+      const validation = WaterfallTier.validateTier(tierData);
+      validate(validation.isValid, validation.errors.join(', '));
+
+      // Create tier
+      const createdTier = await WaterfallTier.create(tierData);
+      createdTiers.push(createdTier);
+
+    } catch (error) {
+      errors.push({
+        tierNumber,
+        tierName: tier.name,
+        error: error.message
+      });
+    }
+  }
+
+  // Return response
+  if (errors.length > 0 && createdTiers.length === 0) {
+    // All tiers failed
+    return res.status(400).json({
+      success: false,
+      message: 'Failed to create waterfall tiers',
+      errors
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    message: `Successfully created ${createdTiers.length} of ${tiers.length} tiers`,
+    data: createdTiers,
+    errors: errors.length > 0 ? errors : undefined
+  });
+}));
+
+/**
  * @route   POST /api/waterfall-tiers/structure/:structureId/create-default
  * @desc    Create default waterfall tiers for a structure
  * @access  Private (requires authentication)
