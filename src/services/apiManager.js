@@ -1263,12 +1263,9 @@ async getDiditToken(_context, _variables) {
       company,
       currency,
       projectName,
+      operatingAgreementHash,
     };
 
-    // Only add operatingAgreementHash if it's not 'n/a'
-    if (operatingAgreementHash !== 'n/a') {
-      params.operatingAgreementHash = operatingAgreementHash;
-    }
 
     return httpClient.makeApiRequest({
       method: 'get',
