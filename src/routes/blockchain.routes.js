@@ -2867,7 +2867,7 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, catchAsync(asy
     tokenValue: contractTokenValue,
     deployedBy: req.auth?.userId || req.auth?.sub,
     network: network || 'polygon',
-    operatingAgreementHash: operatingAgreementHash || null
+    operatingAgreementHash: operatingAgreementHash || 'n/a'
   };
 
   try {

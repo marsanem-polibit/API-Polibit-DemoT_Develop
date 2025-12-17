@@ -1262,8 +1262,8 @@ async getDiditToken(_context, _variables) {
       projectName,
     };
 
-    // Only add operatingAgreementHash if it's not null/undefined
-    if (operatingAgreementHash != null) {
+    // Only add operatingAgreementHash if it's provided and not 'n/a'
+    if (operatingAgreementHash != null && operatingAgreementHash !== 'n/a') {
       params.operatingAgreementHash = operatingAgreementHash;
     }
 
