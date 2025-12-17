@@ -115,7 +115,16 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     incomeDebtTaxRateLegalEntities,
     incomeEquityTaxRateLegalEntities,
     walletOwnerAddress,
-    operatingAgreementHash
+    operatingAgreementHash,
+    incomeFlowTarget,
+    vatRate,
+    vatRateNaturalPersons,
+    vatRateLegalEntities,
+    defaultTaxRate,
+    determinedTier,
+    calculatedIssuances,
+    capitalCallDefaultPercentage,
+    fundType
   } = req.body;
 
   // Validate required fields
@@ -253,6 +262,15 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     incomeEquityTaxRateLegalEntities: sanitizeNumber(incomeEquityTaxRateLegalEntities, null),
     walletOwnerAddress: walletOwnerAddress?.trim() || '',
     operatingAgreementHash: operatingAgreementHash?.trim() || '',
+    incomeFlowTarget: incomeFlowTarget?.trim() || '',
+    vatRate: vatRate?.trim() || '',
+    vatRateNaturalPersons: vatRateNaturalPersons?.trim() || '',
+    vatRateLegalEntities: vatRateLegalEntities?.trim() || '',
+    defaultTaxRate: defaultTaxRate?.trim() || '',
+    determinedTier: determinedTier?.trim() || '',
+    calculatedIssuances: calculatedIssuances?.trim() || '',
+    capitalCallDefaultPercentage: capitalCallDefaultPercentage?.trim() || '',
+    fundType: fundType?.trim() || '',
     createdBy: userId
   };
 
@@ -445,7 +463,9 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, handleStructure
     'witholdingDividendTaxRateNaturalPersons', 'witholdingDividendTaxRateLegalEntities',
     'incomeDebtTaxRateNaturalPersons', 'incomeEquityTaxRateNaturalPersons',
     'incomeDebtTaxRateLegalEntities', 'incomeEquityTaxRateLegalEntities',
-    'walletOwnerAddress', 'operatingAgreementHash'
+    'walletOwnerAddress', 'operatingAgreementHash', 'incomeFlowTarget', 'vatRate',
+    'vatRateNaturalPersons', 'vatRateLegalEntities', 'defaultTaxRate', 'determinedTier',
+    'calculatedIssuances', 'capitalCallDefaultPercentage', 'fundType'
   ];
 
   for (const field of allowedFields) {
