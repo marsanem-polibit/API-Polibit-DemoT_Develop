@@ -20,6 +20,8 @@ class FirmSettings {
       firmAddress: 'firm_address',
       firmPhone: 'firm_phone',
       firmEmail: 'firm_email',
+      userId: 'user_id',
+      createdAt: 'created_at',
       updatedAt: 'updated_at'
     };
 
@@ -47,6 +49,8 @@ class FirmSettings {
       firmAddress: dbData.firm_address,
       firmPhone: dbData.firm_phone,
       firmEmail: dbData.firm_email,
+      userId: dbData.user_id,
+      createdAt: dbData.created_at,
       updatedAt: dbData.updated_at
     };
   }
@@ -78,6 +82,28 @@ class FirmSettings {
     const { data, error } = await supabase
       .from('firm_settings')
       .select('*')
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+
+    return this._toModel(data);
+  }
+
+  /**
+   * Get firm settings by user ID
+   * @param {string} userId - The user ID to find settings for
+   */
+  static async findByUserId(userId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from('firm_settings')
+      .select('*')
+      .eq('user_id', userId)
       .limit(1)
       .single();
 
@@ -179,9 +205,29 @@ class FirmSettings {
   }
 
   /**
-   * Initialize default settings if none exist
+   * Delete firm settings by ID
+   * @param {string} id - The settings ID to delete
    */
-  static async initializeDefaults() {
+  static async findByIdAndDelete(id) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from('firm_settings')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return this._toModel(data);
+  }
+
+  /**
+   * Initialize default settings if none exist
+   * @param {string} userId - Optional user ID to associate with settings
+   */
+  static async initializeDefaults(userId = null) {
     const existing = await this.get();
 
     if (existing) {
@@ -196,6 +242,11 @@ class FirmSettings {
       firmPhone: '',
       firmEmail: ''
     };
+
+    // Add userId if provided
+    if (userId) {
+      defaultSettings.userId = userId;
+    }
 
     return this.create(defaultSettings);
   }

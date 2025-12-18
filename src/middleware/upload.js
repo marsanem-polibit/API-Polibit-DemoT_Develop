@@ -318,6 +318,44 @@ const handleStructureBannerUpload = (req, res, next) => {
   });
 };
 
+// Configure storage for firm logo (use memory storage for Supabase)
+const firmLogoStorage = multer.memoryStorage();
+
+// Configure multer for firm logo upload
+const uploadFirmLogo = multer({
+  storage: firmLogoStorage,
+  fileFilter: imageFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max file size
+  }
+});
+
+// Middleware to handle firm logo upload with error handling
+const handleFirmLogoUpload = (req, res, next) => {
+  const upload = uploadFirmLogo.single('firmLogo');
+
+  upload(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          message: 'File too large. Maximum file size is 5MB'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: `Upload error: ${err.message}`
+      });
+    } else if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message
+      });
+    }
+    next();
+  });
+};
+
 module.exports = {
   uploadProfileImage,
   deleteOldProfileImage,
@@ -330,5 +368,7 @@ module.exports = {
   uploadChatAttachment,
   handleChatAttachmentUpload,
   uploadStructureBanner,
-  handleStructureBannerUpload
+  handleStructureBannerUpload,
+  uploadFirmLogo,
+  handleFirmLogoUpload
 };

@@ -220,7 +220,7 @@ CREATE TABLE IF NOT EXISTS capital_calls (
   investment_id UUID REFERENCES investments(id) ON DELETE SET NULL,
 
   -- Basic Info
-  call_number VARCHAR(50) NOT NULL UNIQUE,
+  call_number VARCHAR(50) NOT NULL,
   call_date DATE NOT NULL,
   due_date DATE NOT NULL,
   sent_date DATE,
@@ -240,7 +240,10 @@ CREATE TABLE IF NOT EXISTS capital_calls (
   -- Metadata
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  -- Composite unique constraint: each structure can have its own sequence of call numbers
+  UNIQUE(structure_id, call_number)
 );
 
 CREATE INDEX idx_capital_calls_structure ON capital_calls(structure_id);

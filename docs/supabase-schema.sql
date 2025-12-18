@@ -251,8 +251,13 @@ CREATE TABLE IF NOT EXISTS firm_settings (
   firm_address TEXT,
   firm_phone VARCHAR(50),
   firm_email VARCHAR(255),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Add index for user_id
+CREATE INDEX IF NOT EXISTS idx_firm_settings_user_id ON firm_settings(user_id);
 
 -- Add triggers for new tables
 CREATE TRIGGER update_investment_subscriptions_updated_at BEFORE UPDATE ON investment_subscriptions

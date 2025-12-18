@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS capital_calls (
   related_investment_id UUID REFERENCES investments(id) ON DELETE SET NULL,
 
   -- Call Info
-  call_number VARCHAR(50) NOT NULL UNIQUE,
+  call_number VARCHAR(50) NOT NULL,
   total_call_amount DECIMAL(20, 2) NOT NULL,
   currency VARCHAR(10) DEFAULT 'USD',
 
@@ -245,7 +245,10 @@ CREATE TABLE IF NOT EXISTS capital_calls (
   -- Metadata
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
-  created_by UUID REFERENCES users(id) ON DELETE SET NULL
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+
+  -- Composite unique constraint: each structure can have its own sequence of call numbers
+  UNIQUE(structure_id, call_number)
 );
 
 -- Indexes for Capital_Calls
