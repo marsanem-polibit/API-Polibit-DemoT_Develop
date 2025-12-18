@@ -73,6 +73,93 @@ router.post('/register', authenticate, catchAsync(async (req, res) => {
     error: authError
   });
 
+  // If user already exists in Supabase Auth, try to get their ID and create users table entry
+  if (authError && authError.message === 'User already registered') {
+    console.log('User exists in Supabase Auth but not in users table, attempting to sync...');
+
+    // Use service role to get the user by email
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    // Get user by email from Supabase Auth
+    const { data: { users }, error: getUserError } = await adminClient.auth.admin.listUsers();
+
+    if (getUserError) {
+      console.error('Error getting user from Supabase Auth:', getUserError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to sync user account',
+        error: getUserError.message
+      });
+    }
+
+    const authUser = users.find(u => u.email === email);
+
+    if (!authUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User registration state is inconsistent. Please contact support.',
+        error: 'User exists in Auth but cannot be retrieved'
+      });
+    }
+
+    // Create user in users table with existing Auth ID
+    let user;
+    try {
+      user = await User.create({
+        id: authUser.id,
+        email,
+        password,
+        firstName,
+        lastName: lastName || '',
+        role
+      });
+      console.log('User synced successfully in users table:', user.id);
+
+      // Create token
+      const token = createToken({
+        id: user.id,
+        email: user.email,
+        role: user.role
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'User account synced and registered successfully',
+        token,
+        expiresIn: '24h',
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          appLanguage: user.appLanguage,
+          profileImage: user.profileImage,
+          role: user.role,
+          kycId: user.kycId,
+          kycStatus: user.kycStatus,
+          kycUrl: user.kycUrl,
+          address: user.address,
+          country: user.country
+        }
+      });
+    } catch (createError) {
+      console.error('Error creating user in users table during sync:', createError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to sync user profile',
+        error: createError.message
+      });
+    }
+  }
+
   if (authError || !authData.user) {
     console.error('Supabase Auth registration error:', authError);
     return res.status(400).json({
