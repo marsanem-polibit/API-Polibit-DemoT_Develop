@@ -310,7 +310,7 @@ router.get('/with-structures', authenticate, requireInvestmentManagerAccess, cat
 
 /**
  * @route   GET /api/investors/:id
- * @desc    Get a single investor by ID
+ * @desc    Get a single investor record by ID with user data
  * @access  Private (requires authentication, Root/Admin/Own investor)
  */
 router.get('/:id', authenticate, catchAsync(async (req, res) => {
@@ -322,22 +322,38 @@ router.get('/:id', authenticate, catchAsync(async (req, res) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   validate(uuidRegex.test(id), 'Invalid investor ID format');
 
-  const user = await User.findById(id);
+  // Find investor record by ID
+  const investor = await Investor.findById(id);
+  validate(investor, 'Investor not found');
 
-  validate(user, 'Investor not found');
-  validate(user.role === ROLES.INVESTOR, 'User is not an investor');
+  // Fetch associated user data
+  const user = investor.userId ? await User.findById(investor.userId) : null;
+  validate(user, 'Associated user not found');
 
   // Check access: Root/Admin can access any, Investors can only access their own
   const hasAccess =
     requestingUserRole === ROLES.ROOT ||
     requestingUserRole === ROLES.ADMIN ||
-    (requestingUserRole === ROLES.INVESTOR && requestingUserId === id);
+    (requestingUserRole === ROLES.INVESTOR && requestingUserId === investor.userId);
 
   validate(hasAccess, 'Unauthorized access to investor data');
 
+  // Build response with investor and user data
+  const investorWithUser = {
+    ...investor,
+    user: user ? {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive
+    } : null
+  };
+
   res.status(200).json({
     success: true,
-    data: user
+    data: investorWithUser
   });
 }));
 
