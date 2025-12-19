@@ -11,6 +11,7 @@ const SmartContract = require('./smartContract');
 // Investment Manager models
 const Structure = require('./structure');
 const StructureAdmin = require('./structureAdmin');
+const Investor = require('./investor');
 const Investment = require('./investment');
 const CapitalCall = require('./capitalCall');
 const Distribution = require('./distribution');
@@ -58,6 +59,7 @@ module.exports = {
   // Investment Manager models
   Structure,
   StructureAdmin,
+  Investor,
   Investment,
   CapitalCall,
   Distribution,
