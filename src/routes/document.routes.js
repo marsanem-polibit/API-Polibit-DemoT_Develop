@@ -7,7 +7,7 @@ const { authenticate } = require('../middleware/auth');
 const { catchAsync, validate } = require('../middleware/errorHandler');
 const { handleDocumentUpload } = require('../middleware/upload');
 const { uploadToSupabase } = require('../utils/fileUpload');
-const { Document, Structure, User, Investment, CapitalCall, Distribution } = require('../models/supabase');
+const { Document, Structure, User, Investor, Investment, CapitalCall, Distribution } = require('../models/supabase');
 const { requireInvestmentManagerAccess, getUserContext, ROLES } = require('../middleware/rbac');
 
 const router = express.Router();
@@ -23,11 +23,7 @@ async function validateEntity(entityType, entityId, userId, userRole) {
       entity = await Structure.findById(entityId);
       break;
     case 'Investor':
-      entity = await User.findById(entityId);
-      // Validate that the user is actually an investor (role 3)
-      if (entity && entity.role !== ROLES.INVESTOR) {
-        throw new Error('User is not an investor');
-      }
+      entity = await Investor.findById(entityId);
       break;
     case 'Investment':
       entity = await Investment.findById(entityId);
