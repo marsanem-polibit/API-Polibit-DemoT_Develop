@@ -30,8 +30,9 @@ router.use((req, res, next) => {
 
 /**
  * @route   POST /api/investors
- * @desc    Create or update investor profile for a user-structure combination
+ * @desc    Create investor profile for a user-structure combination
  * @access  Private (requires authentication, Root/Admin only)
+ * @error   409 - Returns error if investor profile already exists for the user-structure combination
  */
 router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async (req, res) => {
   const { userId: requestingUserId, userRole: requestingUserRole } = req.auth || req.user || {};
@@ -102,6 +103,12 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
 
   // Check if investor profile already exists for this user-structure combination
   const existingInvestors = await Investor.find({ userId, structureId });
+  if (existingInvestors && existingInvestors.length > 0) {
+    return res.status(409).json({
+      success: false,
+      message: 'Investor profile already exists for this user-structure combination'
+    });
+  }
 
   // Prepare investor data
   const investorData = {
@@ -146,26 +153,14 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     investorData.assetsUnderManagement = assetsUnderManagement || null;
   }
 
-  let investor;
-  if (existingInvestors && existingInvestors.length > 0) {
-    // Update existing investor profile
-    investor = await Investor.findByIdAndUpdate(existingInvestors[0].id, investorData);
+  // Create new investor profile
+  const investor = await Investor.create(investorData);
 
-    res.status(200).json({
-      success: true,
-      message: 'Investor profile updated successfully',
-      data: investor
-    });
-  } else {
-    // Create new investor profile
-    investor = await Investor.create(investorData);
-
-    res.status(201).json({
-      success: true,
-      message: 'Investor profile created successfully',
-      data: investor
-    });
-  }
+  res.status(201).json({
+    success: true,
+    message: 'Investor profile created successfully',
+    data: investor
+  });
 }));
 
 /**
