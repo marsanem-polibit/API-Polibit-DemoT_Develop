@@ -55,6 +55,7 @@ async function validateEntity(entityType, entityId, userId, userRole) {
  */
 router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
+  const userRole = req.auth?.role ?? req.user?.role;
 
   // Validate file upload
   validate(req.file, 'File is required');
@@ -79,7 +80,7 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
   validate(validEntityTypes.includes(entityType), `Entity type must be one of: ${validEntityTypes.join(', ')}`);
 
   // Validate entity exists and belongs to user
-  await validateEntity(entityType, entityId, userId);
+  await validateEntity(entityType, entityId, userId, userRole);
 
   // Upload file to Supabase Storage
   const folder = `${entityType.toLowerCase()}s/${entityId}`;
@@ -364,10 +365,11 @@ router.get('/search', authenticate, catchAsync(async (req, res) => {
  */
 router.get('/entity/:entityType/:entityId', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
+  const userRole = req.auth?.role ?? req.user?.role;
   const { entityType, entityId } = req.params;
 
   // Validate entity exists and belongs to user
-  await validateEntity(entityType, entityId, userId);
+  await validateEntity(entityType, entityId, userId, userRole);
 
   const documents = await Document.findByEntity(entityType, entityId);
 
@@ -385,10 +387,11 @@ router.get('/entity/:entityType/:entityId', authenticate, catchAsync(async (req,
  */
 router.get('/entity/:entityType/:entityId/count', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
+  const userRole = req.auth?.role ?? req.user?.role;
   const { entityType, entityId } = req.params;
 
   // Validate entity exists and belongs to user
-  await validateEntity(entityType, entityId, userId);
+  await validateEntity(entityType, entityId, userId, userRole);
 
   const count = await Document.getCountByEntity(entityType, entityId);
 
@@ -425,10 +428,11 @@ router.get('/:id', authenticate, catchAsync(async (req, res) => {
  */
 router.get('/latest/:entityType/:entityId/:documentType', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
+  const userRole = req.auth?.role ?? req.user?.role;
   const { entityType, entityId, documentType } = req.params;
 
   // Validate entity exists and belongs to user
-  await validateEntity(entityType, entityId, userId);
+  await validateEntity(entityType, entityId, userId, userRole);
 
   const document = await Document.getLatestVersion(entityType, entityId, documentType);
 
@@ -447,10 +451,11 @@ router.get('/latest/:entityType/:entityId/:documentType', authenticate, catchAsy
  */
 router.get('/versions/:entityType/:entityId/:documentType', authenticate, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
+  const userRole = req.auth?.role ?? req.user?.role;
   const { entityType, entityId, documentType } = req.params;
 
   // Validate entity exists and belongs to user
-  await validateEntity(entityType, entityId, userId);
+  await validateEntity(entityType, entityId, userId, userRole);
 
   const versions = await Document.getAllVersions(entityType, entityId, documentType);
 
