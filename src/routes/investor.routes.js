@@ -6,6 +6,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { catchAsync, validate } = require('../middleware/errorHandler');
 const User = require('../models/supabase/user');
+const Investor = require('../models/supabase/investor');
 const { requireInvestmentManagerAccess, ROLES } = require('../middleware/rbac');
 const { getSupabase } = require('../config/database');
 
@@ -28,13 +29,15 @@ router.use((req, res, next) => {
 
 /**
  * @route   POST /api/investors
- * @desc    Update an existing user to become an investor
+ * @desc    Create or update investor profile for a user-structure combination
  * @access  Private (requires authentication, Root/Admin only)
  */
 router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async (req, res) => {
+  const { userId: requestingUserId, userRole: requestingUserRole } = req.auth || req.user || {};
 
   const {
     userId,
+    structureId,
     investorType,
     email,
     phoneNumber,
@@ -72,14 +75,16 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
 
   // Validate required fields
   validate(userId, 'User ID is required');
+  validate(structureId, 'Structure ID is required');
   validate(investorType, 'Investor type is required');
   validate(['Individual', 'Institution', 'Fund of Funds', 'Family Office'].includes(investorType), 'Invalid investor type');
 
   // Validate UUID format
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   validate(uuidRegex.test(userId), 'Invalid user ID format');
+  validate(uuidRegex.test(structureId), 'Invalid structure ID format');
 
-  // Find existing user
+  // Verify user exists
   const existingUser = await User.findById(userId);
   validate(existingUser, 'User not found');
 
@@ -94,35 +99,28 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     validate(officeName, 'Office name is required');
   }
 
-  // Prepare update data
+  // Check if investor profile already exists for this user-structure combination
+  const existingInvestors = await Investor.find({ userId, structureId });
+
+  // Prepare investor data
   const investorData = {
-    role: ROLES.INVESTOR,
+    userId,
+    structureId,
     investorType,
+    email: email?.toLowerCase() || existingUser.email,
     phoneNumber: phoneNumber?.trim() || '',
     country: country?.trim() || '',
     taxId: taxId?.trim() || '',
     kycStatus: kycStatus || 'Not Started',
     accreditedInvestor: accreditedInvestor || false,
     riskTolerance: riskTolerance?.trim() || '',
-    investmentPreferences: investmentPreferences || {}
+    investmentPreferences: investmentPreferences || {},
+    createdBy: requestingUserId
   };
-
-  // Update email if provided
-  if (email && email.toLowerCase() !== existingUser.email) {
-    // Validate email format
-    const emailRegex = /^\S+@\S+\.\S+$/;
-    validate(emailRegex.test(email), 'Invalid email format');
-
-    // Check if email already exists for another user
-    const emailUser = await User.findByEmail(email);
-    validate(!emailUser || emailUser.id === userId, 'Email already in use by another user');
-
-    investorData.email = email.toLowerCase();
-  }
 
   // Add type-specific fields
   if (investorType === 'Individual') {
-    investorData.fullName = fullName.trim();
+    investorData.fullName = fullName?.trim() || '';
     investorData.dateOfBirth = dateOfBirth || null;
     investorData.nationality = nationality?.trim() || '';
     investorData.passportNumber = passportNumber?.trim() || '';
@@ -132,29 +130,41 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
     investorData.state = state?.trim() || '';
     investorData.postalCode = postalCode?.trim() || '';
   } else if (investorType === 'Institution') {
-    investorData.institutionName = institutionName.trim();
+    investorData.institutionName = institutionName?.trim() || '';
     investorData.institutionType = institutionType?.trim() || '';
     investorData.registrationNumber = registrationNumber?.trim() || '';
     investorData.legalRepresentative = legalRepresentative?.trim() || '';
   } else if (investorType === 'Fund of Funds') {
-    investorData.fundName = fundName.trim();
+    investorData.fundName = fundName?.trim() || '';
     investorData.fundManager = fundManager?.trim() || '';
     investorData.aum = aum || null;
   } else if (investorType === 'Family Office') {
-    investorData.officeName = officeName.trim();
+    investorData.officeName = officeName?.trim() || '';
     investorData.familyName = familyName?.trim() || '';
     investorData.principalContact = principalContact?.trim() || '';
     investorData.assetsUnderManagement = assetsUnderManagement || null;
   }
 
-  // Update user
-  const updatedUser = await User.findByIdAndUpdate(userId, investorData);
+  let investor;
+  if (existingInvestors && existingInvestors.length > 0) {
+    // Update existing investor profile
+    investor = await Investor.findByIdAndUpdate(existingInvestors[0].id, investorData);
 
-  res.status(200).json({
-    success: true,
-    message: 'User updated to investor successfully',
-    data: updatedUser
-  });
+    res.status(200).json({
+      success: true,
+      message: 'Investor profile updated successfully',
+      data: investor
+    });
+  } else {
+    // Create new investor profile
+    investor = await Investor.create(investorData);
+
+    res.status(201).json({
+      success: true,
+      message: 'Investor profile created successfully',
+      data: investor
+    });
+  }
 }));
 
 /**
