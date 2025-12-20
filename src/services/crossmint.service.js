@@ -1,0 +1,187 @@
+/**
+ * Crossmint Wallet Service
+ * Handles wallet creation and management for users via REST API
+ */
+
+const axios = require('axios');
+
+class CrossmintWalletService {
+  constructor() {
+    this.apiKey = null;
+    this.baseUrl = null;
+    this.isInitialized = false;
+  }
+
+  /**
+   * Initialize the Crossmint service
+   */
+  async initialize() {
+    try {
+      console.log('[Crossmint] Initializing...');
+
+      // Check required environment variables
+      if (!process.env.CROSSMINT_API_KEY) {
+        console.warn('[Crossmint] Missing API key. Set CROSSMINT_API_KEY environment variable');
+        return false;
+      }
+
+      this.apiKey = process.env.CROSSMINT_API_KEY;
+
+      // Set base URL based on environment
+      const environment = process.env.CROSSMINT_ENVIRONMENT || 'staging';
+      this.baseUrl = environment === 'production'
+        ? 'https://www.crossmint.com/api'
+        : 'https://staging.crossmint.com/api';
+
+      this.isInitialized = true;
+      console.log('[Crossmint] ✓ Initialized successfully');
+      console.log(`[Crossmint] Environment: ${environment}`);
+      console.log(`[Crossmint] Base URL: ${this.baseUrl}`);
+
+      return true;
+    } catch (error) {
+      console.error('[Crossmint] Initialization failed:', error.message);
+      this.isInitialized = false;
+      return false;
+    }
+  }
+
+  /**
+   * Create a custodial wallet for a user
+   * @param {Object} userData - User information
+   * @param {string} userData.email - User's email
+   * @param {string} userData.userId - User's unique ID
+   * @returns {Object} { walletAddress, walletId }
+   */
+  async createWallet(userData) {
+    if (!this.isInitialized) {
+      throw new Error('Crossmint service not initialized. Call initialize() first.');
+    }
+
+    try {
+      console.log('[Crossmint] Creating wallet for user:', userData.email);
+
+      // Create a custodial wallet via REST API
+      // Use polygon-amoy for staging, polygon for production
+      const chain = process.env.CROSSMINT_ENVIRONMENT === 'production' ? 'polygon' : 'polygon-amoy';
+
+      const response = await axios.post(
+        `${this.baseUrl}/v1-alpha1/wallets`,
+        {
+          type: 'evm-smart-wallet',
+          email: userData.email,
+          chain: chain,
+        },
+        {
+          headers: {
+            'X-API-KEY': this.apiKey,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('[Crossmint] Raw response:', JSON.stringify(response.data, null, 2));
+
+      const wallet = response.data;
+      const walletAddress = wallet.address || wallet.walletAddress || wallet.publicKey;
+
+      console.log('[Crossmint] ✓ Wallet created successfully');
+      console.log('[Crossmint] Wallet Address:', walletAddress);
+
+      return {
+        walletAddress: walletAddress,
+        walletId: wallet.id || wallet.walletId,
+        chain: wallet.chain || 'polygon',
+      };
+    } catch (error) {
+      console.error('[Crossmint] Wallet creation failed:', error.response?.data || error.message);
+
+      // Check if wallet already exists
+      if (error.response?.status === 409 || error.response?.data?.message?.includes('already exists')) {
+        console.log('[Crossmint] Wallet already exists, retrieving existing wallet...');
+        return this.getWallet(userData);
+      }
+
+      throw new Error(`Failed to create Crossmint wallet: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  /**
+   * Get existing wallet for a user
+   * @param {Object} userData - User information
+   * @param {string} userData.email - User's email
+   * @param {string} userData.userId - User's unique ID
+   * @returns {Object} { walletAddress, walletId }
+   */
+  async getWallet(userData) {
+    if (!this.isInitialized) {
+      throw new Error('Crossmint service not initialized. Call initialize() first.');
+    }
+
+    try {
+      console.log('[Crossmint] Retrieving wallet for user:', userData.email);
+
+      // Get wallet by linked user via REST API
+      const linkedUser = `email:${userData.email}:${userData.userId}`;
+      const response = await axios.get(
+        `${this.baseUrl}/v1-alpha1/wallets`,
+        {
+          params: { linkedUser },
+          headers: {
+            'X-API-KEY': this.apiKey,
+          },
+        }
+      );
+
+      const wallets = response.data;
+
+      if (!wallets || wallets.length === 0) {
+        throw new Error('No wallet found for user');
+      }
+
+      const wallet = wallets[0]; // Get first wallet
+      const walletAddress = wallet.address || wallet.walletAddress || wallet.publicKey;
+
+      console.log('[Crossmint] ✓ Wallet retrieved');
+      console.log('[Crossmint] Wallet Address:', walletAddress);
+
+      return {
+        walletAddress: walletAddress,
+        walletId: wallet.id || wallet.walletId,
+        chain: wallet.chain || 'polygon',
+      };
+    } catch (error) {
+      console.error('[Crossmint] Wallet retrieval failed:', error.response?.data || error.message);
+      throw new Error(`Failed to retrieve Crossmint wallet: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  /**
+   * Create or retrieve wallet for user (idempotent)
+   * @param {Object} userData - User information
+   * @returns {Object} { walletAddress, walletId, isNew }
+   */
+  async getOrCreateWallet(userData) {
+    try {
+      // Try to get existing wallet first
+      const existingWallet = await this.getWallet(userData);
+      return { ...existingWallet, isNew: false };
+    } catch (error) {
+      // If no wallet exists, create one
+      console.log('[Crossmint] No existing wallet, creating new one...');
+      const newWallet = await this.createWallet(userData);
+      return { ...newWallet, isNew: true };
+    }
+  }
+
+  /**
+   * Check if the service is ready to use
+   * @returns {boolean}
+   */
+  isReady() {
+    return this.isInitialized && this.client !== null;
+  }
+}
+
+// Export singleton instance
+module.exports = new CrossmintWalletService();

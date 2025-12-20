@@ -769,6 +769,216 @@ router.post('/didit/verify', authenticate, catchAsync(async (req, res) => {
   });
 }));
 
+// ===== PROSPERA OAUTH ENDPOINTS =====
+
+const prospera = require('../services/prospera.service');
+const crossmint = require('../services/crossmint.service');
+
+// Initialize Prospera OAuth on startup
+prospera.initialize().catch(err => {
+  console.error('[Prospera] Failed to initialize OAuth service:', err.message);
+});
+
+// Initialize Crossmint Wallet service on startup
+crossmint.initialize().catch(err => {
+  console.error('[Crossmint] Failed to initialize wallet service:', err.message);
+});
+
+/**
+ * @route   POST /api/custom/prospera/auth-url
+ * @desc    Get Prospera OAuth authorization URL with PKCE
+ * @access  Public
+ * @response {
+ *   success: boolean
+ *   authUrl: string - URL to redirect user to
+ *   codeVerifier: string - PKCE code verifier (store temporarily)
+ * }
+ */
+router.post('/prospera/auth-url', catchAsync(async (req, res) => {
+  console.log('[Prospera] Generating authorization URL...');
+
+  // Check if Prospera OAuth is ready
+  if (!prospera.isReady()) {
+    return res.status(503).json({
+      success: false,
+      message: 'Prospera OAuth service is not available. Please check server configuration.',
+      error: 'Service unavailable'
+    });
+  }
+
+  // Generate OAuth authorization URL with PKCE
+  const { authUrl, codeVerifier, nonce } = prospera.generateAuthUrl();
+
+  console.log('[Prospera] ✓ Authorization URL generated');
+
+  res.status(200).json({
+    success: true,
+    authUrl,
+    codeVerifier, // Frontend needs to store this temporarily
+    nonce, // Frontend needs to store this for callback validation
+  });
+}));
+
+/**
+ * @route   POST /api/custom/prospera/callback
+ * @desc    Handle Prospera OAuth callback and create/login user
+ * @access  Public
+ * @body    {
+ *   code: string - Authorization code from OAuth callback
+ *   codeVerifier: string - PKCE code verifier from auth-url request
+ * }
+ * @response {
+ *   success: boolean
+ *   message: string
+ *   token: string - JWT token
+ *   prospera: { accessToken, refreshToken, expiresAt }
+ *   user: { ... } - User object
+ * }
+ */
+router.post('/prospera/callback', catchAsync(async (req, res) => {
+  const { code, codeVerifier, nonce } = req.body;
+
+  // Validate required fields
+  validate({ code, codeVerifier, nonce }, 'code, codeVerifier, and nonce are required');
+
+  console.log('[Prospera Callback] Exchanging authorization code...');
+
+  // Check if Prospera OAuth is ready
+  if (!prospera.isReady()) {
+    return res.status(503).json({
+      success: false,
+      message: 'Prospera OAuth service is not available',
+      error: 'Service unavailable'
+    });
+  }
+
+  // Exchange code for tokens and user info
+  const prosperapData = await prospera.exchangeCode(code, codeVerifier, nonce);
+
+  console.log('[Prospera Callback] ✓ Token exchange successful');
+  console.log('[Prospera Callback] User email:', prosperapData.user.email);
+
+  // Check if user exists by email or Prospera ID
+  let user = await User.findOne({ email: prosperapData.user.email });
+
+  if (!user) {
+    // Check by Prospera ID in case email changed
+    user = await User.findByProsperapId(prosperapData.user.prosperaId);
+  }
+
+  if (!user) {
+    // Create new investor user
+    console.log('[Prospera Callback] Creating new user...');
+
+    const [firstName, ...lastNameParts] = (prosperapData.user.name || 'Prospera User').split(' ');
+
+    user = await User.create({
+      email: prosperapData.user.email,
+      firstName: firstName || '',
+      lastName: lastNameParts.join(' ') || '',
+      profileImage: prosperapData.user.picture,
+      role: 3, // Investor role (ROLES.INVESTOR)
+      prosperaId: prosperapData.user.prosperaId,
+      kycStatus: 'Pending', // Will need to complete KYC
+      isActive: true,
+      isEmailVerified: prosperapData.user.emailVerified || false,
+      appLanguage: 'en',
+      lastLogin: new Date(),
+    });
+
+    console.log('[Prospera Callback] ✓ New user created:', user.id);
+  } else {
+    // Update existing user with Prospera ID and last login
+    console.log('[Prospera Callback] Updating existing user:', user.id);
+
+    user = await User.findByIdAndUpdate(user.id, {
+      prosperaId: prosperapData.user.prosperaId,
+      profileImage: prosperapData.user.picture || user.profileImage,
+      lastLogin: new Date(),
+      isEmailVerified: prosperapData.user.emailVerified || user.isEmailVerified,
+    });
+
+    console.log('[Prospera Callback] ✓ User updated');
+  }
+
+  // Create or retrieve Crossmint wallet for the user
+  let walletData = null;
+  if (crossmint.isReady()) {
+    try {
+      console.log('[Prospera Callback] Creating/retrieving Crossmint wallet...');
+
+      walletData = await crossmint.getOrCreateWallet({
+        email: user.email,
+        userId: user.id,
+      });
+
+      console.log('[Prospera Callback] ✓ Wallet ready:', walletData.walletAddress);
+
+      // Update user with wallet address if new or changed
+      if (user.walletAddress !== walletData.walletAddress) {
+        user = await User.findByIdAndUpdate(user.id, {
+          walletAddress: walletData.walletAddress,
+        });
+        console.log('[Prospera Callback] ✓ Wallet address saved to user profile');
+      }
+    } catch (walletError) {
+      // Log wallet error but don't fail the login
+      console.error('[Prospera Callback] Wallet creation failed:', walletError.message);
+      console.error('[Prospera Callback] Continuing with login without wallet...');
+    }
+  } else {
+    console.log('[Prospera Callback] Crossmint not initialized, skipping wallet creation');
+  }
+
+  // Check if user is active
+  if (!user.isActive) {
+    return res.status(403).json({
+      success: false,
+      message: 'Account has been deactivated'
+    });
+  }
+
+  // Create JWT token (same format as regular login)
+  const token = createToken({
+    id: user.id,
+    email: user.email,
+    role: user.role
+  });
+
+  console.log('[Prospera Callback] ✓ Login successful for user:', user.email);
+
+  res.status(200).json({
+    success: true,
+    message: 'Prospera login successful',
+    token,
+    expiresIn: '24h',
+    // Include Prospera tokens for potential future use
+    prospera: {
+      accessToken: prosperapData.accessToken,
+      refreshToken: prosperapData.refreshToken,
+      expiresAt: prosperapData.expiresAt,
+    },
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNumber: user.phoneNumber,
+      appLanguage: user.appLanguage,
+      profileImage: user.profileImage,
+      role: user.role,
+      lastLogin: user.lastLogin,
+      prosperaId: user.prosperaId,
+      kycId: user.kycId,
+      kycStatus: user.kycStatus,
+      kycUrl: user.kycUrl,
+      address: user.addressLine1,
+      country: user.country,
+      walletAddress: user.walletAddress,
+    }
+  });
+}));
+
 /**
  * @route   GET /api/custom/health
  * @desc    Health check for Custom API routes
@@ -781,6 +991,7 @@ router.get('/health', (req, res) => {
       polibit: 'operational',
       didit: 'operational',
       contractDeployment: 'operational',
+      prospera: prospera.isReady() ? 'operational' : 'unavailable',
     },
     status: 'operational',
     timestamp: new Date().toISOString(),

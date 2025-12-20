@@ -400,21 +400,45 @@ router.get('/:id/with-structures', authenticate, catchAsync(async (req, res) => 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   validate(uuidRegex.test(id), 'Invalid investor ID format');
 
-  // Find investor record by ID
-  const investor = await Investor.findById(id);
-  validate(investor, 'Investor not found');
-
-  // Fetch associated user data
-  const user = investor.userId ? await User.findById(investor.userId) : null;
-  validate(user, 'Associated user not found');
+  // First, find the user by ID to verify they exist
+  const user = await User.findById(id);
+  validate(user, 'User not found');
+  validate(user.role === ROLES.INVESTOR, 'User is not an investor');
 
   // Check access: Root/Admin can access any, Investors can only access their own
   const hasAccess =
     requestingUserRole === ROLES.ROOT ||
     requestingUserRole === ROLES.ADMIN ||
-    (requestingUserRole === ROLES.INVESTOR && requestingUserId === investor.userId);
+    (requestingUserRole === ROLES.INVESTOR && requestingUserId === id);
 
   validate(hasAccess, 'Unauthorized access to investor data');
+
+  // Try to find investor record by ID (user ID and investor ID are the same)
+  // For new users, this may not exist yet
+  const investor = await Investor.findById(id);
+
+  if (!investor) {
+    // New user with no investor assignments yet - return empty structures
+    console.log(`[Investor API] No investor record found for user ${id}, returning empty structures`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: user.id,
+        userId: user.id,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive
+        },
+        structures: [], // No structures assigned yet
+        structure: null
+      }
+    });
+  }
 
   // Fetch associated structure data
   const structure = investor.structureId ? await Structure.findById(investor.structureId) : null;
@@ -422,14 +446,14 @@ router.get('/:id/with-structures', authenticate, catchAsync(async (req, res) => 
   // Build response with investor, user, and structure data
   const investorWithData = {
     ...investor,
-    user: user ? {
+    user: {
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
       role: user.role,
       isActive: user.isActive
-    } : null,
+    },
     structure: structure ? {
       id: structure.id,
       name: structure.name,

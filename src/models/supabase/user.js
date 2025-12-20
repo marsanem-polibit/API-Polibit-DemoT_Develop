@@ -47,9 +47,17 @@ class User {
     }
 
     // Hash password before storing
+    // For OAuth users, generate a random secure password they'll never use
     if (userData.password) {
       const salt = await bcrypt.genSalt(10);
       userData.password = await bcrypt.hash(userData.password, salt);
+    } else {
+      // Generate random password for OAuth users (64 random characters)
+      const crypto = require('crypto');
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      const salt = await bcrypt.genSalt(10);
+      userData.password = await bcrypt.hash(randomPassword, salt);
+      console.log('[User Model] Generated random password for OAuth user');
     }
 
     // Convert camelCase to snake_case for database
@@ -103,6 +111,10 @@ class User {
       family_name: userData.familyName || null,
       principal_contact: userData.principalContact || null,
       assets_under_management: userData.assetsUnderManagement || null,
+      // OAuth provider fields
+      prospera_id: userData.prosperaId || null,
+      // Blockchain wallet
+      wallet_address: userData.walletAddress || null,
     };
 
     // Include ID if provided (for Supabase Auth integration)
@@ -155,6 +167,28 @@ class User {
       .from('users')
       .select('*')
       .eq('email', email.toLowerCase())
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      throw error;
+    }
+
+    return this._toModel(data);
+  }
+
+  /**
+   * Find user by Prospera ID
+   * @param {string} prosperaId - Prospera user ID
+   * @returns {Promise<Object|null>} User or null
+   */
+  static async findByProsperapId(prosperaId) {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('prospera_id', prosperaId)
       .single();
 
     if (error) {
@@ -740,6 +774,10 @@ class User {
       familyName: dbUser.family_name,
       principalContact: dbUser.principal_contact,
       assetsUnderManagement: dbUser.assets_under_management,
+      // OAuth provider fields
+      prosperaId: dbUser.prospera_id,
+      // Blockchain wallet
+      walletAddress: dbUser.wallet_address,
       createdAt: dbUser.created_at,
       updatedAt: dbUser.updated_at,
 
@@ -813,6 +851,10 @@ class User {
       familyName: 'family_name',
       principalContact: 'principal_contact',
       assetsUnderManagement: 'assets_under_management',
+      // OAuth provider fields
+      prosperaId: 'prospera_id',
+      // Blockchain wallet
+      walletAddress: 'wallet_address',
     };
 
     Object.entries(modelData).forEach(([key, value]) => {
