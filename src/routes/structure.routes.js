@@ -384,16 +384,22 @@ router.get('/:id/children', authenticate, requireInvestmentManagerAccess, catchA
 /**
  * @route   GET /api/structures/:id/with-investors
  * @desc    Get structure with all investors
- * @access  Private (requires authentication, Root/Admin only)
+ * @access  Private (requires authentication, Root/Admin/Guest)
  */
-router.get('/:id/with-investors', authenticate, requireInvestmentManagerAccess, catchAsync(async (req, res) => {
+router.get('/:id/with-investors', authenticate, catchAsync(async (req, res) => {
   const { userId, userRole } = getUserContext(req);
   const { id } = req.params;
+
+  // Only allow Root, Admin, and Guest roles
+  validate(
+    [ROLES.ROOT, ROLES.ADMIN, ROLES.GUEST].includes(userRole),
+    'Unauthorized: Only Root, Admin, and Guest roles can access this endpoint'
+  );
 
   const structure = await Structure.findById(id);
   validate(structure, 'Structure not found');
 
-  // Root can access any structure, Admin can only access their own
+  // Root and Guest can access any structure, Admin can only access their own
   if (userRole === ROLES.ADMIN) {
     validate(structure.createdBy === userId, 'Unauthorized access to structure');
   }
