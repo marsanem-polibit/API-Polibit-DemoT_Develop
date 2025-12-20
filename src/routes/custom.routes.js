@@ -774,15 +774,29 @@ router.post('/didit/verify', authenticate, catchAsync(async (req, res) => {
 const prospera = require('../services/prospera.service');
 const crossmint = require('../services/crossmint.service');
 
-// Initialize Prospera OAuth on startup
-prospera.initialize().catch(err => {
-  console.error('[Prospera] Failed to initialize OAuth service:', err.message);
-});
+// Helper function to ensure Prospera is initialized (lazy initialization for serverless)
+async function ensureProsperapInitialized() {
+  if (!prospera.isReady()) {
+    console.log('[Prospera] Service not ready, initializing...');
+    const success = await prospera.initialize();
+    if (!success) {
+      throw new Error('Failed to initialize Prospera OAuth service');
+    }
+  }
+  return true;
+}
 
-// Initialize Crossmint Wallet service on startup
-crossmint.initialize().catch(err => {
-  console.error('[Crossmint] Failed to initialize wallet service:', err.message);
-});
+// Helper function to ensure Crossmint is initialized (lazy initialization for serverless)
+async function ensureCrossmintInitialized() {
+  if (!crossmint.isReady()) {
+    console.log('[Crossmint] Service not ready, initializing...');
+    const success = await crossmint.initialize();
+    if (!success) {
+      throw new Error('Failed to initialize Crossmint service');
+    }
+  }
+  return true;
+}
 
 /**
  * @route   POST /api/custom/prospera/auth-url
@@ -797,12 +811,15 @@ crossmint.initialize().catch(err => {
 router.post('/prospera/auth-url', catchAsync(async (req, res) => {
   console.log('[Prospera] Generating authorization URL...');
 
-  // Check if Prospera OAuth is ready
-  if (!prospera.isReady()) {
+  // Ensure Prospera is initialized (lazy initialization)
+  try {
+    await ensureProsperapInitialized();
+  } catch (error) {
+    console.error('[Prospera] Initialization failed:', error.message);
     return res.status(503).json({
       success: false,
       message: 'Prospera OAuth service is not available. Please check server configuration.',
-      error: 'Service unavailable'
+      error: error.message
     });
   }
 
@@ -843,12 +860,15 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
 
   console.log('[Prospera Callback] Exchanging authorization code...');
 
-  // Check if Prospera OAuth is ready
-  if (!prospera.isReady()) {
+  // Ensure Prospera is initialized (lazy initialization)
+  try {
+    await ensureProsperapInitialized();
+  } catch (error) {
+    console.error('[Prospera] Initialization failed:', error.message);
     return res.status(503).json({
       success: false,
       message: 'Prospera OAuth service is not available',
-      error: 'Service unavailable'
+      error: error.message
     });
   }
 
@@ -903,31 +923,30 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
 
   // Create or retrieve Crossmint wallet for the user
   let walletData = null;
-  if (crossmint.isReady()) {
-    try {
-      console.log('[Prospera Callback] Creating/retrieving Crossmint wallet...');
+  try {
+    // Ensure Crossmint is initialized (lazy initialization)
+    await ensureCrossmintInitialized();
 
-      walletData = await crossmint.getOrCreateWallet({
-        email: user.email,
-        userId: user.id,
+    console.log('[Prospera Callback] Creating/retrieving Crossmint wallet...');
+
+    walletData = await crossmint.getOrCreateWallet({
+      email: user.email,
+      userId: user.id,
+    });
+
+    console.log('[Prospera Callback] ✓ Wallet ready:', walletData.walletAddress);
+
+    // Update user with wallet address if new or changed
+    if (user.walletAddress !== walletData.walletAddress) {
+      user = await User.findByIdAndUpdate(user.id, {
+        walletAddress: walletData.walletAddress,
       });
-
-      console.log('[Prospera Callback] ✓ Wallet ready:', walletData.walletAddress);
-
-      // Update user with wallet address if new or changed
-      if (user.walletAddress !== walletData.walletAddress) {
-        user = await User.findByIdAndUpdate(user.id, {
-          walletAddress: walletData.walletAddress,
-        });
-        console.log('[Prospera Callback] ✓ Wallet address saved to user profile');
-      }
-    } catch (walletError) {
-      // Log wallet error but don't fail the login
-      console.error('[Prospera Callback] Wallet creation failed:', walletError.message);
-      console.error('[Prospera Callback] Continuing with login without wallet...');
+      console.log('[Prospera Callback] ✓ Wallet address saved to user profile');
     }
-  } else {
-    console.log('[Prospera Callback] Crossmint not initialized, skipping wallet creation');
+  } catch (walletError) {
+    // Log wallet error but don't fail the login
+    console.error('[Prospera Callback] Wallet creation failed:', walletError.message);
+    console.error('[Prospera Callback] Continuing with login without wallet...');
   }
 
   // Check if user is active
