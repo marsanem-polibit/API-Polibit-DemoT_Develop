@@ -16,10 +16,19 @@ const router = express.Router();
 /**
  * @route   POST /api/users/register
  * @desc    Register a new user
- * @access  Private (requires authentication)
+ * @access  Private (requires authentication, ROOT only)
  */
 router.post('/register', authenticate, catchAsync(async (req, res) => {
+  const { userRole } = getUserContext(req);
   const { email, password, firstName, lastName, role } = req.body;
+
+  // Only ROOT role can create users
+  if (userRole !== ROLES.ROOT) {
+    return res.status(403).json({
+      success: false,
+      message: 'Unauthorized: Only ROOT users can create new users'
+    });
+  }
 
   // Validate input
   if (!email || !password || !firstName) {
