@@ -18,6 +18,7 @@ const capitalCallRoutes = require('./capitalCall.routes');
 const distributionRoutes = require('./distribution.routes');
 const waterfallTierRoutes = require('./waterfallTier.routes');
 const documentRoutes = require('./document.routes');
+const transactionRoutes = require('./transaction.routes');
 
 // Chat System routes
 const conversationRoutes = require('./conversation.routes');
@@ -63,6 +64,7 @@ router.use('/capital-calls', capitalCallRoutes);
 router.use('/distributions', distributionRoutes);
 router.use('/waterfall-tiers', waterfallTierRoutes);
 router.use('/documents', documentRoutes);
+router.use('/transactions', transactionRoutes);
 
 // Mount Chat System routes
 router.use('/conversations', conversationRoutes);
@@ -111,6 +113,7 @@ router.get('/', (_req, res) => {
       distributions: '/api/distributions',
       waterfallTiers: '/api/waterfall-tiers',
       documents: '/api/documents',
+      transactions: '/api/transactions',
       // Chat System endpoints
       conversations: '/api/conversations',
       messages: '/api/messages',
