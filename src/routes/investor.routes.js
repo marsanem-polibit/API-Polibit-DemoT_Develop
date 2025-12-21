@@ -366,7 +366,15 @@ router.get('/me/with-structures', authenticate, catchAsync(async (req, res) => {
 
   // Find all investor records for this user
   const investors = await Investor.find({ userId });
-  validate(investors && investors.length > 0, 'No investor profile found for this user');
+
+  // If no investors found, return empty array
+  if (!investors || investors.length === 0) {
+    return res.status(200).json({
+      success: true,
+      count: 0,
+      data: []
+    });
+  }
 
   // Fetch associated structure data for each investor
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
