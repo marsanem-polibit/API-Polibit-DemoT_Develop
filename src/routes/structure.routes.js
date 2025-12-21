@@ -124,7 +124,9 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     determinedTier,
     calculatedIssuances,
     capitalCallDefaultPercentage,
-    fundType
+    fundType,
+    contractTemplateUrlNational,
+    contractTemplateUrlInternational
   } = req.body;
 
   // Validate required fields
@@ -271,6 +273,8 @@ router.post('/', authenticate, requireInvestmentManagerAccess, handleStructureBa
     calculatedIssuances: calculatedIssuances?.trim() || '',
     capitalCallDefaultPercentage: capitalCallDefaultPercentage?.trim() || '',
     fundType: fundType?.trim() || '',
+    contractTemplateUrlNational: contractTemplateUrlNational?.trim() || '',
+    contractTemplateUrlInternational: contractTemplateUrlInternational?.trim() || '',
     createdBy: userId
   };
 
@@ -471,7 +475,8 @@ router.put('/:id', authenticate, requireInvestmentManagerAccess, handleStructure
     'incomeDebtTaxRateLegalEntities', 'incomeEquityTaxRateLegalEntities',
     'walletOwnerAddress', 'operatingAgreementHash', 'incomeFlowTarget', 'vatRate',
     'vatRateNaturalPersons', 'vatRateLegalEntities', 'defaultTaxRate', 'determinedTier',
-    'calculatedIssuances', 'capitalCallDefaultPercentage', 'fundType'
+    'calculatedIssuances', 'capitalCallDefaultPercentage', 'fundType',
+    'contractTemplateUrlNational', 'contractTemplateUrlInternational'
   ];
 
   for (const field of allowedFields) {

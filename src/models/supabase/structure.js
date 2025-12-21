@@ -116,6 +116,8 @@ class Structure {
       calculatedIssuances: 'calculated_issuances',
       capitalCallDefaultPercentage: 'capital_call_default_percentage',
       fundType: 'fund_type',
+      contractTemplateUrlNational: 'contract_template_url_national',
+      contractTemplateUrlInternational: 'contract_template_url_international',
       createdBy: 'created_by',
       createdAt: 'created_at',
       updatedAt: 'updated_at'
@@ -241,6 +243,8 @@ class Structure {
       calculatedIssuances: dbData.calculated_issuances,
       capitalCallDefaultPercentage: dbData.capital_call_default_percentage,
       fundType: dbData.fund_type,
+      contractTemplateUrlNational: dbData.contract_template_url_national,
+      contractTemplateUrlInternational: dbData.contract_template_url_international,
       createdBy: dbData.created_by,
       createdAt: dbData.created_at,
       updatedAt: dbData.updated_at
