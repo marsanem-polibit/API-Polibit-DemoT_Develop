@@ -950,7 +950,7 @@ router.delete('/:id', authenticate, requireInvestmentManagerAccess, catchAsync(a
 /**
  * @route   GET /api/investors/me/dashboard
  * @desc    Get investor dashboard data with structures, summary, and distributions
- * @access  Private (requires authentication, Root/Admin/Support/Guest only - Investor role blocked)
+ * @access  Private (requires authentication, Investor role only)
  *
  * @success {200} Success Response
  * {
@@ -1008,49 +1008,73 @@ router.delete('/:id', authenticate, requireInvestmentManagerAccess, catchAsync(a
  * }
  */
 router.get('/me/dashboard', authenticate, catchAsync(async (req, res) => {
-  const userId = req.auth.userId || req.user.id;
+  const userId = req.auth?.userId || req.user?.id;
   const { userRole } = getUserContext(req);
   const supabase = getSupabase();
 
-  // Block INVESTOR role from accessing this endpoint
-  validate(userRole !== ROLES.INVESTOR, 'Access denied. Investor role cannot access this endpoint.');
+  // Allow only INVESTOR role to access this endpoint
+  validate(userRole === ROLES.INVESTOR, 'Access denied. This endpoint is only accessible to investors (role 3)');
 
   // Get user details
   const user = await User.findById(userId);
   validate(user, 'User not found');
 
-  // Get all structures this user has invested in (from investments table)
-  const { data: investments, error: invError } = await supabase
-    .from('investments')
-    .select(`
-      structure_id,
-      structures:structure_id (
-        id,
-        name,
-        type,
-        status,
-        base_currency,
-        total_invested
-      )
-    `)
-    .eq('user_id', userId);
+  // Get all investor records for this user
+  const investors = await Investor.find({ userId });
 
-  if (invError) {
-    throw new Error(`Error fetching structures: ${invError.message}`);
+  // If no investors found, return empty dashboard
+  if (!investors || investors.length === 0) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        investor: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          profileImage: user.profileImage
+        },
+        structures: [],
+        summary: {
+          totalCommitment: 0,
+          totalCalledCapital: 0,
+          totalCurrentValue: 0,
+          totalDistributed: 0,
+          totalReturn: 0,
+          totalReturnPercent: 0
+        },
+        distributions: []
+      }
+    });
   }
 
-  // Get unique structures from investments
-  const uniqueStructures = new Map();
-  investments?.forEach(inv => {
-    if (inv.structures && !uniqueStructures.has(inv.structure_id)) {
-      uniqueStructures.set(inv.structure_id, {
-        structure_id: inv.structure_id,
+  // Fetch structures for all investor records
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const structureInvestors = await Promise.all(
+    investors.map(async (investor) => {
+      let structure = null;
+      if (investor.structureId && uuidRegex.test(investor.structureId)) {
+        try {
+          structure = await Structure.findById(investor.structureId);
+        } catch (error) {
+          console.error(`Error fetching structure ${investor.structureId}:`, error.message);
+        }
+      }
+
+      return {
+        structure_id: investor.structureId,
         user_id: userId,
-        structure: inv.structures
-      });
-    }
-  });
-  const structureInvestors = Array.from(uniqueStructures.values());
+        structure: structure ? {
+          id: structure.id,
+          name: structure.name,
+          type: structure.type,
+          status: structure.status,
+          base_currency: structure.baseCurrency,
+          total_invested: structure.totalInvested
+        } : null
+      };
+    })
+  ).then(results => results.filter(r => r.structure !== null));
 
   // Get all capital call allocations for this user
   const { data: capitalCallAllocations, error: ccError } = await supabase
