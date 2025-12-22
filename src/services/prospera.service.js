@@ -78,9 +78,10 @@ class ProsperapOAuthService {
 
   /**
    * Generate OAuth authorization URL with PKCE
+   * @param {string} redirectUri - Optional specific redirect URI to use (required when multiple URIs are registered)
    * @returns {Object} { authUrl, codeVerifier }
    */
-  generateAuthUrl() {
+  generateAuthUrl(redirectUri) {
     if (!this.isInitialized || !this.client) {
       throw new Error('Prospera OAuth client not initialized. Call initialize() first.');
     }
@@ -92,14 +93,23 @@ class ProsperapOAuthService {
     // Generate nonce for OpenID Connect
     const nonce = generators.nonce();
 
-    // Generate authorization URL
-    const authUrl = this.client.authorizationUrl({
+    // Build authorization URL options
+    const authOptions = {
       scope: 'openid email profile eprospera:person.details.read',
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       state: generators.state(), // CSRF protection
       nonce: nonce, // Required by Prospera for openid scope
-    });
+    };
+
+    // Add redirect_uri if specified (required when multiple URIs are registered)
+    if (redirectUri) {
+      authOptions.redirect_uri = redirectUri;
+      console.log('[Prospera OAuth] Using redirect URI:', redirectUri);
+    }
+
+    // Generate authorization URL
+    const authUrl = this.client.authorizationUrl(authOptions);
 
     console.log('[Prospera OAuth] Generated auth URL');
 

@@ -809,7 +809,12 @@ async function ensureCrossmintInitialized() {
  * }
  */
 router.post('/prospera/auth-url', catchAsync(async (req, res) => {
+  const { redirectUri } = req.body;
+
   console.log('[Prospera] Generating authorization URL...');
+  if (redirectUri) {
+    console.log('[Prospera] Requested redirect URI:', redirectUri);
+  }
 
   // Ensure Prospera is initialized (lazy initialization)
   try {
@@ -824,7 +829,8 @@ router.post('/prospera/auth-url', catchAsync(async (req, res) => {
   }
 
   // Generate OAuth authorization URL with PKCE
-  const { authUrl, codeVerifier, nonce } = prospera.generateAuthUrl();
+  // Pass redirectUri to ensure correct redirect when multiple URIs are registered
+  const { authUrl, codeVerifier, nonce } = prospera.generateAuthUrl(redirectUri);
 
   console.log('[Prospera] ✓ Authorization URL generated');
 
