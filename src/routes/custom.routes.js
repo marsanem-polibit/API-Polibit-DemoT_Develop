@@ -23,10 +23,13 @@ const router = express.Router();
  */
 const ensureBodyParsed = (req) => {
   return new Promise((resolve, reject) => {
-    // If body is already parsed, return it
-    if (req.body && typeof req.body === 'object') {
+    // If body is already parsed AND has content, return it
+    if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+      console.log('[Body Parser] Body already parsed:', Object.keys(req.body));
       return resolve(req.body);
     }
+
+    console.log('[Body Parser] Body not parsed or empty, reading raw body...');
 
     // Otherwise, manually parse the raw body
     let data = '';
@@ -36,6 +39,7 @@ const ensureBodyParsed = (req) => {
     req.on('end', () => {
       try {
         req.body = data ? JSON.parse(data) : {};
+        console.log('[Body Parser] Parsed body:', Object.keys(req.body));
         resolve(req.body);
       } catch (error) {
         console.error('[Body Parser] Failed to parse body:', error);
@@ -1249,8 +1253,23 @@ router.post('/prospera/complete-registration', catchAsync(async (req, res) => {
  * @access  Private (requires auth token)
  */
 router.post('/prospera/link-wallet', authenticate, catchAsync(async (req, res) => {
+  // Log body BEFORE ensureBodyParsed
+  console.log('[Prospera Link Wallet] ==========================================');
+  console.log('[Prospera Link Wallet] BODY PARSING DEBUG');
+  console.log('[Prospera Link Wallet] - req.body before parsing:', req.body);
+  console.log('[Prospera Link Wallet] - typeof req.body:', typeof req.body);
+  console.log('[Prospera Link Wallet] - Object.keys(req.body):', req.body ? Object.keys(req.body) : 'null/undefined');
+  console.log('[Prospera Link Wallet] ==========================================');
+
   // Ensure body is parsed (for Vercel compatibility)
   await ensureBodyParsed(req);
+
+  // Log body AFTER ensureBodyParsed
+  console.log('[Prospera Link Wallet] ==========================================');
+  console.log('[Prospera Link Wallet] AFTER PARSING DEBUG');
+  console.log('[Prospera Link Wallet] - req.body after parsing:', req.body);
+  console.log('[Prospera Link Wallet] - Object.keys(req.body):', req.body ? Object.keys(req.body) : 'null/undefined');
+  console.log('[Prospera Link Wallet] ==========================================');
 
   const { code, codeVerifier, nonce, redirectUri } = req.body;
 
@@ -1259,6 +1278,11 @@ router.post('/prospera/link-wallet', authenticate, catchAsync(async (req, res) =
 
   console.log('[Prospera Link Wallet] Starting wallet link process for user:', req.user.email);
   console.log('[Prospera Link Wallet] Redirect URI:', redirectUri);
+  console.log('[Prospera Link Wallet] Extracted values:');
+  console.log('[Prospera Link Wallet] - code:', code ? 'present' : 'MISSING');
+  console.log('[Prospera Link Wallet] - codeVerifier:', codeVerifier ? 'present' : 'MISSING');
+  console.log('[Prospera Link Wallet] - nonce:', nonce ? 'present' : 'MISSING');
+  console.log('[Prospera Link Wallet] - redirectUri:', redirectUri || 'UNDEFINED');
 
   try {
     // Exchange authorization code for tokens
