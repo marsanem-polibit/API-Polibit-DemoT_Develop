@@ -46,14 +46,17 @@ class ProsperapOAuthService {
 
       console.log('[Prospera OAuth] ✓ Issuer discovered');
 
-      // Create OAuth client
-      const redirectUri = `${process.env.FRONTEND_URL}/lp-portal/login`;
-      console.log(`[Prospera OAuth] Creating client with redirect URI: ${redirectUri}`);
+      // Create OAuth client with multiple redirect URIs
+      const redirectUris = [
+        `${process.env.FRONTEND_URL}/lp-portal/login`,
+        `${process.env.FRONTEND_URL}/investment-manager/account`
+      ];
+      console.log(`[Prospera OAuth] Creating client with redirect URIs:`, redirectUris);
 
       this.client = new this.issuer.Client({
         client_id: process.env.EPROSPERA_CLIENT_ID,
         client_secret: process.env.EPROSPERA_CLIENT_SECRET,
-        redirect_uris: [redirectUri],
+        redirect_uris: redirectUris,
         response_types: ['code'],
       });
 

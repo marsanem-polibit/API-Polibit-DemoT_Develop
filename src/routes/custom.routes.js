@@ -1194,6 +1194,110 @@ router.post('/prospera/complete-registration', catchAsync(async (req, res) => {
 }));
 
 /**
+ * @route   POST /api/custom/prospera/link-wallet
+ * @desc    Link Próspera wallet to existing user (for Investment Manager)
+ * @access  Private (requires auth token)
+ */
+router.post('/prospera/link-wallet', authenticate, catchAsync(async (req, res) => {
+  const { code, codeVerifier, nonce } = req.body;
+
+  // Validate required fields
+  validate({ code, codeVerifier, nonce }, 'code, codeVerifier, and nonce are required');
+
+  console.log('[Prospera Link Wallet] Starting wallet link process for user:', req.user.email);
+
+  try {
+    // Exchange authorization code for tokens
+    const prosperapData = await prospera.exchangeCode(code, codeVerifier, nonce);
+
+    console.log('[Prospera Link Wallet] ✓ OAuth tokens obtained');
+
+    // Get the authenticated user (from JWT token)
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user already has a wallet
+    if (user.walletAddress) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already has a wallet linked',
+        walletAddress: user.walletAddress
+      });
+    }
+
+    // Update user with Próspera ID if not already set
+    if (!user.prosperaId) {
+      await User.findByIdAndUpdate(
+        user.id,
+        { prosperaId: prosperapData.user.prosperaId },
+        { new: true }
+      );
+      console.log('[Prospera Link Wallet] ✓ Próspera ID linked to user');
+    }
+
+    // Create or retrieve Crossmint wallet
+    let walletData = null;
+    try {
+      await ensureCrossmintInitialized();
+
+      console.log('[Prospera Link Wallet] Creating/retrieving Crossmint wallet...');
+
+      walletData = await crossmint.getOrCreateWallet({
+        email: user.email,
+        userId: user.id,
+      });
+
+      console.log('[Prospera Link Wallet] ✓ Wallet ready:', walletData.walletAddress);
+
+      // Update user with wallet address
+      const updatedUser = await User.findByIdAndUpdate(
+        user.id,
+        { walletAddress: walletData.walletAddress },
+        { new: true }
+      );
+
+      console.log('[Prospera Link Wallet] ✓ Wallet address saved to user profile');
+
+      return res.status(200).json({
+        success: true,
+        message: 'Wallet linked successfully',
+        walletAddress: updatedUser.walletAddress,
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          walletAddress: updatedUser.walletAddress,
+          prosperaId: updatedUser.prosperaId,
+        }
+      });
+
+    } catch (walletError) {
+      console.error('[Prospera Link Wallet] Wallet creation failed:', walletError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create wallet',
+        error: walletError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('[Prospera Link Wallet] Error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to link Próspera wallet',
+      error: error.message
+    });
+  }
+}));
+
+/**
  * @route   GET /api/custom/health
  * @desc    Health check for Custom API routes
  * @access  Public
