@@ -91,7 +91,7 @@ class ProsperapOAuthService {
 
     // Generate authorization URL
     const authUrl = this.client.authorizationUrl({
-      scope: 'openid email profile',
+      scope: 'openid email profile eprospera:person.details.read',
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       state: generators.state(), // CSRF protection
