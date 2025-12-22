@@ -40,8 +40,8 @@ async function validateEntity(entityType, entityId, userId, userRole) {
 
   validate(entity, `${entityType} not found`);
 
-  // Root can access any entity, Admin can only access their own
-  if (userRole === ROLES.ADMIN) {
+  // Root can access any entity, Admin and Investor can only access their own
+  if (userRole === ROLES.ADMIN || userRole === ROLES.INVESTOR) {
     validate(entity.userId === userId, `Unauthorized access to ${entityType}`);
   }
 
@@ -51,14 +51,14 @@ async function validateEntity(entityType, entityId, userId, userRole) {
 /**
  * @route   POST /api/documents
  * @desc    Create a new document with file upload
- * @access  Private (requires authentication, Root/Admin/Support only - Guest and Investor roles blocked)
+ * @access  Private (requires authentication, Root/Admin/Support/Investor - Guest role blocked)
  */
 router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res) => {
   const userId = req.auth.userId || req.user.id;
   const userRole = req.auth?.role ?? req.user?.role;
 
-  // Block GUEST and INVESTOR roles from creating documents
-  validate(userRole !== ROLES.GUEST && userRole !== ROLES.INVESTOR, 'Access denied. Guest and Investor roles cannot create documents.');
+  // Block GUEST role from creating documents
+  validate(userRole !== ROLES.GUEST, 'Access denied. Guest role cannot create documents.');
 
   // Validate file upload
   validate(req.file, 'File is required');
@@ -81,6 +81,11 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
 
   const validEntityTypes = ['Structure', 'Investor', 'Investment', 'CapitalCall', 'Distribution'];
   validate(validEntityTypes.includes(entityType), `Entity type must be one of: ${validEntityTypes.join(', ')}`);
+
+  // INVESTOR role can only create documents for Investor entities
+  if (userRole === ROLES.INVESTOR) {
+    validate(entityType === 'Investor', 'Investor role can only create documents for Investor entities.');
+  }
 
   // Validate entity exists and belongs to user
   await validateEntity(entityType, entityId, userId, userRole);
