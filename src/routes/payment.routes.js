@@ -39,7 +39,8 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
     structureId,
     contractId,
     status,
-    tokenId
+    tokenId,
+    walletAddress
   } = req.body;
 
   // Validate required fields
@@ -77,6 +78,7 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
     contractId: contractId.trim(),
     status: status?.trim() || 'pending',
     tokenId: tokenId?.trim() || null,
+    walletAddress: walletAddress?.trim() || null,
     userId: userId
   };
 
