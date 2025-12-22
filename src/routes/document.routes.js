@@ -257,7 +257,7 @@ router.get('/all', authenticate, catchAsync(async (req, res) => {
  *         "filePath": "https://storage.url/file.pdf",
  *         "fileSize": 1024567,
  *         "mimeType": "application/pdf",
- *         "uploadedBy": "user-uuid",
+ *         "uploadedBy": "user-uuid-string",
  *         "version": 1,
  *         "isActive": true,
  *         "createdAt": "2025-12-05T10:30:00Z"
