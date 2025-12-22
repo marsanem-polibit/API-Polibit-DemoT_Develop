@@ -1879,23 +1879,37 @@ router.post('/contract/mint-tokens', authenticate, catchAsync(async (req, res) =
     });
   }
 
-  // Contract ABI for the mint function
-  const contractAbi = [{
-    'inputs': [
-      {
-        'name': 'account',
-        'type': 'address'
-      },
-      {
-        'name': 'amount',
-        'type': 'uint256'
-      }
-    ],
-    'name': 'mint',
-    'outputs': [],
-    'stateMutability': 'nonpayable',
-    'type': 'function'
-  }];
+  // Contract ABI for the mint function and owner check
+  const contractAbi = [
+    {
+      'inputs': [
+        {
+          'name': 'account',
+          'type': 'address'
+        },
+        {
+          'name': 'amount',
+          'type': 'uint256'
+        }
+      ],
+      'name': 'mint',
+      'outputs': [],
+      'stateMutability': 'nonpayable',
+      'type': 'function'
+    },
+    {
+      'inputs': [],
+      'name': 'owner',
+      'outputs': [
+        {
+          'name': '',
+          'type': 'address'
+        }
+      ],
+      'stateMutability': 'view',
+      'type': 'function'
+    }
+  ];
 
   try {
     // Create contract instance
@@ -1905,6 +1919,34 @@ router.post('/contract/mint-tokens', authenticate, catchAsync(async (req, res) =
     const formattedPrivateKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
     const account = web3.eth.accounts.privateKeyToAccount(formattedPrivateKey);
     web3.eth.accounts.wallet.add(account);
+
+    // Log the minting account address for debugging
+    console.log('Minting account address:', account.address);
+    console.log('Contract address:', contractAddress);
+    console.log('Target user address:', userAddress);
+    console.log('Amount to mint:', parsedAmount);
+
+    // Check if the minting account is the contract owner
+    try {
+      const contractOwner = await contract.methods.owner().call();
+      console.log('Contract owner address:', contractOwner);
+
+      if (contractOwner.toLowerCase() !== account.address.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied',
+          message: `Minting account (${account.address}) is not the contract owner (${contractOwner}). The contract must be deployed with the same account used for minting, or the minting account must be granted MINTER_ROLE.`,
+          details: {
+            mintingAccount: account.address,
+            contractOwner: contractOwner,
+            contractAddress: contractAddress
+          }
+        });
+      }
+    } catch (ownerCheckError) {
+      console.warn('Could not verify contract owner (contract may not have owner() function):', ownerCheckError.message);
+      // Continue with minting attempt - contract might use different permission model
+    }
 
     // Get current nonce
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
