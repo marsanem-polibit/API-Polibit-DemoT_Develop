@@ -63,7 +63,7 @@ class ProsperapOAuthService {
       this.isInitialized = true;
       console.log('[Prospera OAuth] ✓ Initialized successfully');
       console.log(`[Prospera OAuth] Issuer: ${this.issuer.issuer}`);
-      console.log(`[Prospera OAuth] Redirect URI: ${redirectUri}`);
+      console.log(`[Prospera OAuth] Redirect URIs: ${redirectUris.join(', ')}`);
 
       return true;
     } catch (error) {
