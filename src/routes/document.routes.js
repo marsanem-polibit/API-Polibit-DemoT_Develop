@@ -317,16 +317,45 @@ router.get('/combined', authenticate, catchAsync(async (req, res) => {
   // Get user's own documents (non-structure)
   const userDocuments = await Document.find(userFilter);
 
+  // Find all investor records for this userId
+  const investors = await Investor.find({ userId });
+
+  // Get documents for each investor record
+  const investorDocuments = [];
+  if (investors && investors.length > 0) {
+    for (const investor of investors) {
+      let investorDocFilter = {
+        entityType: 'Investor',
+        entityId: investor.id
+      };
+
+      if (documentType) {
+        investorDocFilter.documentType = documentType;
+      }
+      if (isActive !== undefined) {
+        investorDocFilter.isActive = isActive === 'true';
+      }
+
+      const docs = await Document.find(investorDocFilter);
+      if (docs && docs.length > 0) {
+        investorDocuments.push(...docs);
+      }
+    }
+  }
+
+  // Combine user documents with investor documents
+  const allUserDocuments = [...userDocuments, ...investorDocuments];
+
   res.status(200).json({
     success: true,
     data: {
-      userDocuments: userDocuments,
+      userDocuments: allUserDocuments,
       structureDocuments: structureDocuments
     },
     counts: {
-      userDocuments: userDocuments.length,
+      userDocuments: allUserDocuments.length,
       structureDocuments: structureDocuments.length,
-      total: userDocuments.length + structureDocuments.length
+      total: allUserDocuments.length + structureDocuments.length
     }
   });
 }));
