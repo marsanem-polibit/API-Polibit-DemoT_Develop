@@ -381,7 +381,8 @@ router.put('/:id', authenticate, handleDocumentUpload, catchAsync(async (req, re
     'status',
     'tokenId',
     'tokens',
-    'paymentMethod'
+    'paymentMethod',
+    'adminNotes'
   ];
 
   // Update allowed fields
