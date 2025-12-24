@@ -30,6 +30,7 @@
     "nodemailer": "^7.0.10",
     "openid-client": "^5.7.1",
     "qs": "^6.11.2",
+    "resend": "^6.6.0",
     "web3": "^4.16.0"
   },
   "devDependencies": {

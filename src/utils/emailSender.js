@@ -1,11 +1,13 @@
 /**
  * Email Sender Utility
- * Handles sending emails via SMTP using nodemailer
+ * Handles sending emails via Resend
  */
 
-const nodemailer = require('nodemailer');
-const { EmailSettings, EmailLog } = require('../models/supabase');
-const { decrypt } = require('./encryption');
+const { Resend } = require('resend');
+const { EmailLog } = require('../models/supabase');
+
+// Initialize Resend with API key from environment variable
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Validate email address format
@@ -33,99 +35,52 @@ function validateEmailAddresses(emails) {
 }
 
 /**
- * Create nodemailer transporter from user's email settings
+ * Test Resend connection by sending a test email
  */
-async function createTransporter(userId) {
-  // Get user's email settings
-  const settings = await EmailSettings.findByUserId(userId, true);
-
-  if (!settings) {
-    throw new Error('Email settings not configured. Please configure SMTP settings first.');
+async function testConnection(userId, testEmail) {
+  if (!testEmail || !isValidEmail(testEmail)) {
+    throw new Error('Valid test email address is required');
   }
 
-  if (!settings.isActive) {
-    throw new Error('Email settings are inactive');
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY environment variable is not configured');
   }
 
-  // Decrypt password
-  let password;
+  if (!process.env.RESEND_FROM_EMAIL) {
+    throw new Error('RESEND_FROM_EMAIL environment variable is not configured');
+  }
+
   try {
-    password = decrypt(settings.smtpPassword);
-  } catch (error) {
-    throw new Error('Failed to decrypt SMTP password');
-  }
-
-  // Create transporter with proper SSL/TLS configuration
-  const transportConfig = {
-    host: settings.smtpHost,
-    port: settings.smtpPort,
-    secure: settings.smtpSecure, // true for 465, false for other ports (587, 25)
-    auth: {
-      user: settings.smtpUsername,
-      pass: password
-    }
-  };
-
-  // Debug logging
-  console.log('[EmailSender] Creating transporter with config:', {
-    host: settings.smtpHost,
-    port: settings.smtpPort,
-    secure: settings.smtpSecure,
-    username: settings.smtpUsername
-  });
-
-  // Only add TLS options for secure connections (port 465) or specific hosts
-  // For port 587 (STARTTLS), let nodemailer handle TLS upgrade automatically
-  if (settings.smtpSecure) {
-    // Port 465 with implicit SSL
-    transportConfig.tls = {
-      rejectUnauthorized: false
-    };
-  }
-
-  const transporter = nodemailer.createTransport(transportConfig);
-
-  return { transporter, settings };
-}
-
-/**
- * Test SMTP connection
- */
-async function testConnection(userId, testEmail = null) {
-  try {
-    const { transporter, settings } = await createTransporter(userId);
-
-    // Verify connection
     const startTime = Date.now();
-    await transporter.verify();
-    const responseTime = Date.now() - startTime;
 
-    let testEmailSent = false;
+    // Send test email using Resend
+    const { data, error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: [testEmail],
+      subject: 'Resend Test Email',
+      html: '<p>This is a test email to verify your Resend configuration is working correctly.</p>',
+      text: 'This is a test email to verify your Resend configuration is working correctly.'
+    });
 
-    // Optionally send test email
-    if (testEmail && isValidEmail(testEmail)) {
-      await transporter.sendMail({
-        from: `"${settings.fromName || 'Test'}" <${settings.fromEmail}>`,
-        to: testEmail,
-        subject: 'SMTP Test Email',
-        text: 'This is a test email to verify your SMTP configuration is working correctly.',
-        html: '<p>This is a test email to verify your SMTP configuration is working correctly.</p>'
-      });
-      testEmailSent = true;
+    if (error) {
+      throw new Error(error.message || 'Failed to send test email');
     }
+
+    const responseTime = Date.now() - startTime;
 
     return {
       connected: true,
-      testEmailSent,
-      responseTime
+      testEmailSent: true,
+      responseTime,
+      messageId: data.id
     };
   } catch (error) {
-    throw new Error(`SMTP connection failed: ${error.message}`);
+    throw new Error(`Resend connection failed: ${error.message}`);
   }
 }
 
 /**
- * Send email using user's SMTP settings
+ * Send email using Resend
  */
 async function sendEmail(userId, emailData) {
   const {
@@ -140,6 +95,15 @@ async function sendEmail(userId, emailData) {
     fromName,
     replyTo
   } = emailData;
+
+  // Validate Resend configuration
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY environment variable is not configured');
+  }
+
+  if (!process.env.RESEND_FROM_EMAIL && !fromEmail) {
+    throw new Error('RESEND_FROM_EMAIL environment variable or fromEmail parameter is required');
+  }
 
   // Validate required fields
   if (!to || !Array.isArray(to) || to.length === 0) {
@@ -174,45 +138,54 @@ async function sendEmail(userId, emailData) {
     }
   }
 
-  // Get transporter and settings
-  const { transporter, settings } = await createTransporter(userId);
+  // Prepare "from" field
+  const finalFromEmail = fromEmail || process.env.RESEND_FROM_EMAIL;
+  const from = fromName
+    ? `${fromName} <${finalFromEmail}>`
+    : finalFromEmail;
 
-  // Process attachments to ensure proper format
+  // Process attachments for Resend format
   const processedAttachments = attachments ? attachments.map(att => {
-    // If attachment has base64 content, ensure encoding is specified
+    // Resend expects attachments in this format:
+    // { filename: string, content: Buffer | string }
     if (att.content && typeof att.content === 'string') {
+      // If content is base64 string, convert to Buffer
       return {
         filename: att.filename,
-        content: att.content,
-        encoding: att.encoding || 'base64',
-        contentType: att.contentType || att.mimeType
+        content: Buffer.from(att.content, 'base64')
       };
     }
-    // If it's already in proper nodemailer format (path, href, etc.)
-    return att;
-  }) : [];
+    return {
+      filename: att.filename,
+      content: att.content
+    };
+  }) : undefined;
 
-  // Prepare email
-  const mailOptions = {
-    from: `"${fromName || settings.fromName || ''}" <${fromEmail || settings.fromEmail}>`,
-    to: to.join(', '),
-    cc: cc ? cc.join(', ') : undefined,
-    bcc: bcc ? bcc.join(', ') : undefined,
-    replyTo: replyTo || settings.replyToEmail,
+  // Prepare email data for Resend
+  const emailPayload = {
+    from,
+    to,
     subject,
-    text: bodyText,
-    html: bodyHtml,
+    html: bodyHtml || undefined,
+    text: bodyText || undefined,
+    cc: cc && cc.length > 0 ? cc : undefined,
+    bcc: bcc && bcc.length > 0 ? bcc : undefined,
+    reply_to: replyTo || undefined,
     attachments: processedAttachments
   };
 
   try {
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
+    // Send email via Resend
+    const { data, error } = await resend.emails.send(emailPayload);
+
+    if (error) {
+      throw new Error(error.message || 'Failed to send email via Resend');
+    }
 
     // Log successful send
     await EmailLog.create({
       userId,
-      emailSettingsId: settings.id,
+      emailSettingsId: null, // Not using EmailSettings anymore
       toAddresses: to,
       ccAddresses: cc || [],
       bccAddresses: bcc || [],
@@ -222,16 +195,13 @@ async function sendEmail(userId, emailData) {
       hasAttachments: !!(attachments && attachments.length > 0),
       attachmentCount: attachments ? attachments.length : 0,
       status: 'sent',
-      messageId: info.messageId,
+      messageId: data.id,
       sentAt: new Date().toISOString()
     });
 
-    // Update last used timestamp
-    await EmailSettings.updateLastUsed(userId);
-
     return {
       success: true,
-      messageId: info.messageId,
+      messageId: data.id,
       to,
       subject,
       sentAt: new Date().toISOString()
@@ -240,7 +210,7 @@ async function sendEmail(userId, emailData) {
     // Log failed attempt
     await EmailLog.create({
       userId,
-      emailSettingsId: settings.id,
+      emailSettingsId: null,
       toAddresses: to,
       ccAddresses: cc || [],
       bccAddresses: bcc || [],
