@@ -9,7 +9,7 @@ const { handleDocumentUpload } = require('../middleware/upload');
 const { uploadToSupabase } = require('../utils/fileUpload');
 const Payment = require('../models/supabase/payment');
 const { Structure, User } = require('../models/supabase');
-const { requireInvestmentManagerAccess, getUserContext } = require('../middleware/rbac');
+const { requireInvestmentManagerAccess, getUserContext, ROLES } = require('../middleware/rbac');
 
 const router = express.Router();
 
@@ -364,10 +364,19 @@ router.get('/:id', authenticate, catchAsync(async (req, res) => {
 /**
  * @route   PUT /api/payments/:id
  * @desc    Update a payment
- * @access  Private (requires authentication)
+ * @access  Private (requires authentication, Root/Admin only)
  */
 router.put('/:id', authenticate, handleDocumentUpload, catchAsync(async (req, res) => {
+  const { userRole } = getUserContext(req);
   const { id } = req.params;
+
+  // Only ROOT and ADMIN roles can update payments
+  if (userRole !== ROLES.ROOT && userRole !== ROLES.ADMIN) {
+    return res.status(403).json({
+      success: false,
+      message: 'Unauthorized: Only Root and Admin users can update payments'
+    });
+  }
 
   const payment = await Payment.findById(id);
   validate(payment, 'Payment not found');
