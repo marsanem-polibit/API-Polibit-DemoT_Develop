@@ -268,7 +268,7 @@ router.get('/search', authenticate, catchAsync(async (req, res) => {
   validate(q, 'Search query is required');
   validate(q.length >= 2, 'Search query must be at least 2 characters');
 
-  const investors = await User.searchInvestors(q);
+  const investors = await Investor.search(q);
 
   res.status(200).json({
     success: true,
