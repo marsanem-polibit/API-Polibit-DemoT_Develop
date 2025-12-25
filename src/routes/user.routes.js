@@ -8,7 +8,7 @@ const { catchAsync, validate } = require('../middleware/errorHandler');
 const { User } = require('../models/supabase');
 const { requireRootAccess, ROLES, getUserContext } = require('../middleware/rbac');
 const { getSupabase } = require('../config/database');
-const { uploadProfileImage } = require('../middleware/upload');
+const { uploadProfileImage, uploadDocument } = require('../middleware/upload');
 const { uploadToSupabase, deleteFromSupabase } = require('../utils/fileUpload');
 
 const router = express.Router();
@@ -319,6 +319,9 @@ router.get('/profile', authenticate, catchAsync(async (req, res) => {
       assetsUnderManagement: user.assetsUnderManagement,
       // Blockchain wallet
       walletAddress: user.walletAddress,
+      // Tax fields
+      taxClassification: user.taxClassification,
+      w9Form: user.w9Form,
     }
   });
 }));
@@ -369,7 +372,9 @@ router.put('/profile', authenticate, catchAsync(async (req, res) => {
     officeName,
     familyName,
     principalContact,
-    assetsUnderManagement
+    assetsUnderManagement,
+    // Tax fields
+    taxClassification
   } = req.body;
 
   // Get user ID from authenticated token
@@ -614,6 +619,11 @@ router.put('/profile', authenticate, catchAsync(async (req, res) => {
     updateData.assetsUnderManagement = assetsUnderManagement;
   }
 
+  // Tax fields
+  if (taxClassification !== undefined && taxClassification !== null && taxClassification !== '') {
+    updateData.taxClassification = taxClassification;
+  }
+
   // Update user in database
   const updatedUser = await User.findByIdAndUpdate(userId, updateData);
 
@@ -670,6 +680,9 @@ router.put('/profile', authenticate, catchAsync(async (req, res) => {
       assetsUnderManagement: updatedUser.assetsUnderManagement,
       // Blockchain wallet
       walletAddress: updatedUser.walletAddress,
+      // Tax fields
+      taxClassification: updatedUser.taxClassification,
+      w9Form: updatedUser.w9Form,
     }
   });
 }));
@@ -788,6 +801,123 @@ router.delete('/profile-image', authenticate, catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Profile image deleted successfully'
+  });
+}));
+
+/**
+ * @route   POST /api/users/w9-form
+ * @desc    Upload user W9 form document
+ * @access  Private (requires authentication)
+ */
+router.post('/w9-form', authenticate, uploadDocument.single('w9Form'), catchAsync(async (req, res) => {
+  // Get user ID from authenticated token
+  const userId = req.auth.userId || req.user.id;
+
+  // Check if file was uploaded
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'No file uploaded. Please provide a W9 form document.'
+    });
+  }
+
+  // Find the user
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  // Delete old W9 form from Supabase Storage if exists
+  if (user.w9Form) {
+    try {
+      // Extract path from Supabase URL if it's a full URL
+      if (user.w9Form.includes('supabase')) {
+        const urlParts = user.w9Form.split('/documents/');
+        if (urlParts[1]) {
+          await deleteFromSupabase(urlParts[1]);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting old W9 form:', error);
+      // Continue with upload even if delete fails
+    }
+  }
+
+  // Upload to Supabase Storage
+  const uploadResult = await uploadToSupabase(
+    req.file.buffer,
+    req.file.originalname,
+    req.file.mimetype,
+    'w9-forms'
+  );
+
+  // Save Supabase public URL to database
+  const updatedUser = await User.findByIdAndUpdate(userId, {
+    w9Form: uploadResult.publicUrl
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'W9 form uploaded successfully',
+    data: {
+      w9Form: updatedUser.w9Form,
+      filename: uploadResult.fileName,
+      size: uploadResult.size,
+      mimetype: req.file.mimetype
+    }
+  });
+}));
+
+/**
+ * @route   DELETE /api/users/w9-form
+ * @desc    Delete user W9 form document
+ * @access  Private (requires authentication)
+ */
+router.delete('/w9-form', authenticate, catchAsync(async (req, res) => {
+  // Get user ID from authenticated token
+  const userId = req.auth.userId || req.user.id;
+
+  // Find the user
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  if (!user.w9Form) {
+    return res.status(404).json({
+      success: false,
+      message: 'No W9 form to delete'
+    });
+  }
+
+  // Delete the document from Supabase Storage
+  try {
+    // Extract path from Supabase URL if it's a full URL
+    if (user.w9Form.includes('supabase')) {
+      const urlParts = user.w9Form.split('/documents/');
+      if (urlParts[1]) {
+        await deleteFromSupabase(urlParts[1]);
+      }
+    }
+  } catch (error) {
+    console.error('Error deleting W9 form from storage:', error);
+    // Continue to remove from database even if storage delete fails
+  }
+
+  // Remove from database
+  await User.findByIdAndUpdate(userId, {
+    w9Form: null
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'W9 form deleted successfully'
   });
 }));
 
@@ -964,6 +1094,9 @@ router.get('/:id', authenticate, catchAsync(async (req, res) => {
       assetsUnderManagement: user.assetsUnderManagement,
       // Blockchain wallet
       walletAddress: user.walletAddress,
+      // Tax fields
+      taxClassification: user.taxClassification,
+      w9Form: user.w9Form,
       // Timestamps
       lastLogin: user.lastLogin,
       createdAt: user.createdAt,

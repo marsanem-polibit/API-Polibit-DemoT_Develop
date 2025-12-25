@@ -117,6 +117,9 @@ class User {
       prospera_id: userData.prosperaId || null,
       // Blockchain wallet
       wallet_address: userData.walletAddress || null,
+      // Tax fields
+      tax_classification: userData.taxClassification || null,
+      w9_form: userData.w9Form || null,
     };
 
     // Include ID if provided (for Supabase Auth integration)
@@ -780,6 +783,9 @@ class User {
       prosperaId: dbUser.prospera_id,
       // Blockchain wallet
       walletAddress: dbUser.wallet_address,
+      // Tax fields
+      taxClassification: dbUser.tax_classification,
+      w9Form: dbUser.w9_form,
       // MFA
       mfaFactorId: dbUser.mfa_factor_id,
       createdAt: dbUser.created_at,
@@ -859,6 +865,9 @@ class User {
       prosperaId: 'prospera_id',
       // Blockchain wallet
       walletAddress: 'wallet_address',
+      // Tax fields
+      taxClassification: 'tax_classification',
+      w9Form: 'w9_form',
       // MFA
       mfaFactorId: 'mfa_factor_id',
     };
