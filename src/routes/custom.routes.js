@@ -106,6 +106,17 @@ router.post('/login', catchAsync(async (req, res) => {
     });
   }
 
+  // Check if user has MFA enabled
+  if (user.mfaFactorId) {
+    return res.status(401).json({
+      success: false,
+      mfaRequired: true,
+      message: 'MFA verification required.',
+      userId: user.id,
+      factorId: user.mfaFactorId,
+    });
+  }
+
   // Update last login
   const updatedUser = await User.findByIdAndUpdate(user.id, {
     lastLogin: new Date()
