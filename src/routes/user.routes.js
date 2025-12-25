@@ -837,18 +837,25 @@ router.get('/filter', authenticate, catchAsync(async (req, res) => {
 /**
  * @route   GET /api/users/:id
  * @desc    Get single user by ID
- * @access  Private (requires authentication, Root/Admin/Staff only)
+ * @access  Private (requires authentication, Root/Admin/Staff can access any user, Investor can access only their own)
  * @params  id - User UUID to retrieve
  */
 router.get('/:id', authenticate, catchAsync(async (req, res) => {
-  const { userRole } = getUserContext(req);
+  const { userRole, userId: currentUserId } = getUserContext(req);
   const { id } = req.params;
 
-  // Only ROOT, ADMIN, and STAFF roles can access this endpoint
-  if (userRole !== ROLES.ROOT && userRole !== ROLES.ADMIN && userRole !== ROLES.STAFF) {
+  // ROOT, ADMIN, and STAFF can access any user
+  const canAccessAnyUser = userRole === ROLES.ROOT || userRole === ROLES.ADMIN || userRole === ROLES.STAFF;
+
+  // INVESTOR can only access their own user data
+  const isAccessingOwnData = userRole === ROLES.INVESTOR && id === currentUserId;
+
+  if (!canAccessAnyUser && !isAccessingOwnData) {
     return res.status(403).json({
       success: false,
-      message: 'Unauthorized: Only Root, Admin, and Staff users can access user details'
+      message: userRole === ROLES.INVESTOR
+        ? 'Unauthorized: Investors can only access their own user details'
+        : 'Unauthorized: Only Root, Admin, Staff, and Investor (own data) users can access user details'
     });
   }
 
