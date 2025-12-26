@@ -94,10 +94,10 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
   } = req.body;
 
   // Guest and Investor roles cannot create payments
-  if (userRole === ROLES.GUEST || userRole === ROLES.INVESTOR) {
+  if (userRole === ROLES.GUEST) {
     return res.status(403).json({
       success: false,
-      message: 'Unauthorized: Guest and Investor users cannot create payments'
+      message: 'Unauthorized: Guest users cannot create payments'
     });
   }
 
