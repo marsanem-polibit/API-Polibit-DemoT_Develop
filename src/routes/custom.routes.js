@@ -768,37 +768,12 @@ router.post('/mfa/verify', authenticate, catchAsync(async (req, res) => {
 // ===== DIDIT KYC API =====
 
 /**
- * @route   POST /api/custom/didit/token
- * @desc    Get DiDit authentication token
- * @access  Public
- * @body    {} (uses env credentials)
- */
-router.post('/didit/token', authenticate, catchAsync(async (req, res) => {
-  const context = { auth: req.auth };
-  const result = await apiManager.getDiditToken(context, req.body);
-
-  if (result.error) {
-    return res.status(result.statusCode || 500).json({
-      error: result.error,
-      message: 'Failed to get DiDit token',
-      details: result.body,
-    });
-  }
-
-  res.status(result.statusCode || 200).json({
-    success: true,
-    message: 'Token generated successfully',
-    data: result.body,
-  });
-}));
-
-/**
  * @route   POST /api/custom/didit/session
  * @desc    Create a new DiDit KYC verification session or retrieve existing one
  * @access  Private (requires authentication)
  * @body    {
  *            callback?: string (optional, default: from env or https://cdmxhomes.polibit.io/marketplace),
- *            features?: string (optional, default: from env or "OCR + FACE"),
+ *            workflowId?: string (optional, default: from env DIDIT_WORKFLOW_ID),
  *            vendorData?: string (optional, default: from env or "CDMXHomes")
  *          }
  */
@@ -817,23 +792,10 @@ router.post('/didit/session', authenticate, catchAsync(async (req, res) => {
 
   const context = { auth: req.auth };
 
-  // Get DiDit authentication token
-  const tokenResult = await apiManager.getDiditToken(context, {});
-
-  if (tokenResult.error) {
-    return res.status(tokenResult.statusCode || 500).json({
-      error: 'Failed to get DiDit authentication token',
-      details: tokenResult.error,
-    });
-  }
-
-  const token = tokenResult.body.access_token;
-
   // If user already has a kyc_id, retrieve the existing session
   if (user.kycId) {
     const variables = {
-      sessionID: user.kycId,
-      token
+      sessionID: user.kycId
     };
 
     const result = await apiManager.getDiditSession(context, variables);
@@ -864,7 +826,6 @@ router.post('/didit/session', authenticate, catchAsync(async (req, res) => {
   const hadPreviousSession = !!user.kycId;
 
   const result = await apiManager.createDiditSession(context, {
-    token,
     ...req.body
   });
 
@@ -914,20 +875,8 @@ router.get('/didit/session/:sessionId', authenticate, catchAsync(async (req, res
   const context = { auth: req.auth };
 
   // Get DiDit authentication token
-  const tokenResult = await apiManager.getDiditToken(context, {});
-
-  if (tokenResult.error) {
-    return res.status(tokenResult.statusCode || 500).json({
-      error: 'Failed to get DiDit authentication token',
-      details: tokenResult.error,
-    });
-  }
-
-  const token = tokenResult.body.access_token;
-
   const variables = {
-    sessionID: sessionId,
-    token
+    sessionID: sessionId
   };
 
   const result = await apiManager.getDiditSession(context, variables);
@@ -965,20 +914,16 @@ router.get('/didit/session/:sessionId', authenticate, catchAsync(async (req, res
  * @desc    Get DiDit session PDF report
  * @access  Public
  * @params  sessionId - The DiDit session ID
- * @query   token: string (required - DiDit auth token)
  */
 router.get('/didit/session/:sessionId/pdf', authenticate, catchAsync(async (req, res) => {
   const { sessionId } = req.params;
-  const { token } = req.query;
 
   validate(sessionId, 'sessionId is required');
-  validate(token, 'DiDit token is required');
 
   const context = { auth: req.auth };
-  const variables = { 
-    ...req.query, 
-    sessionID: sessionId,
-    token 
+  const variables = {
+    ...req.query,
+    sessionID: sessionId
   };
 
   const result = await apiManager.getDiditPDF(context, variables);
@@ -1004,33 +949,20 @@ router.get('/didit/session/:sessionId/pdf', authenticate, catchAsync(async (req,
 
 /**
  * @route   POST /api/custom/didit/verify
- * @desc    Complete DiDit KYC verification flow (token + session + decision)
+ * @desc    Complete DiDit KYC verification flow (create session)
  * @access  Public
  * @body    {
  *            callback?: string,
- *            features?: string,
+ *            workflowId?: string,
  *            vendorData?: string
  *          }
  */
 router.post('/didit/verify', authenticate, catchAsync(async (req, res) => {
   const context = { auth: req.auth };
 
-  // Step 1: Get token
-  const tokenResult = await apiManager.getDiditToken(context, {});
-  
-  if (tokenResult.error) {
-    return res.status(tokenResult.statusCode || 500).json({
-      error: 'Failed to get authentication token',
-      details: tokenResult.error,
-    });
-  }
-
-  const token = tokenResult.body.access_token;
-
-  // Step 2: Create session
-  const sessionResult = await apiManager.createDiditSession(context, { 
-    token,
-    ...req.body 
+  // Create session
+  const sessionResult = await apiManager.createDiditSession(context, {
+    ...req.body
   });
 
   if (sessionResult.error) {
@@ -1048,8 +980,7 @@ router.post('/didit/verify', authenticate, catchAsync(async (req, res) => {
     data: {
       sessionId: sessionData.session_id,
       verificationUrl: sessionData.url,
-      token: token,
-      expiresIn: tokenResult.body.expires_in,
+      workflowId: sessionData.workflow_id,
     },
   });
 }));

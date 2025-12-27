@@ -1128,57 +1128,22 @@ console.log('****** BODY:', body);
     });
   }
 
-async getDiditToken(_context, _variables) {
-  const authBasic = getEnvVariable('DIDIT_AUTH_BASIC', '');
-
-  try {
-    const formData = qs.stringify({ 
-      grant_type: 'client_credentials' 
-    });
-
-    const response = await axios({
-      method: 'POST',
-      url: 'https://apx.didit.me/auth/v2/token/',
-      data: formData,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${authBasic}`,
-      }
-    });
-
-    return {
-      statusCode: response.status,
-      headers: response.headers,
-      body: response.data,
-      error: null,
-      success: true
-    };
-  } catch (error) {
-    return {
-      statusCode: error.response?.status || 500,
-      headers: error.response?.headers,
-      body: error.response?.data || null,
-      error: error.message,
-      success: false
-    };
-  }
-}
-
   async createDiditSession(context, variables) {
-    const { token, callback, features, vendorData } = variables;
+    const { callback, workflowId, vendorData } = variables;
 
     const body = JSON.stringify({
       callback: callback || process.env.DIDIT_CALLBACK_URL || 'https://cdmxhomes.polibit.io/marketplace',
-      features: features || process.env.DIDIT_FEATURES || 'OCR + FACE',
+      workflow_id: workflowId || process.env.DIDIT_WORKFLOW_ID,
       vendor_data: vendorData || process.env.DIDIT_VENDOR_DATA || 'CDMXHomes',
     });
 
     return httpClient.makeApiRequest({
       method: 'post',
-      url: 'https://verification.didit.me/v1/session/',
+      url: 'https://verification.didit.me/v2/session/',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'accept': 'application/json',
+        'x-api-key': process.env.DIDIT_API_KEY,
       },
       params: {},
       body,
@@ -1188,14 +1153,15 @@ async getDiditToken(_context, _variables) {
   }
 
   async getDiditSession(context, variables) {
-    const { token, sessionID } = variables;
+    const { sessionID } = variables;
 
     return httpClient.makeApiRequest({
       method: 'get',
-      url: `https://verification.didit.me/v1/session/${sessionID}/decision/`,
+      url: `https://verification.didit.me/v2/session/${sessionID}/decision/`,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'accept': 'application/json',
+        'x-api-key': process.env.DIDIT_API_KEY,
       },
       params: {},
       returnBody: true,
@@ -1204,14 +1170,15 @@ async getDiditToken(_context, _variables) {
   }
 
   async getDiditPDF(context, variables) {
-    const { token, sessionID } = variables;
+    const { sessionID } = variables;
 
     return httpClient.makeApiRequest({
       method: 'get',
-      url: `https://verification.didit.me/v1/session/${sessionID}/generate-pdf/`,
+      url: `https://verification.didit.me/v2/session/${sessionID}/generate-pdf/`,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'accept': 'application/json',
+        'x-api-key': process.env.DIDIT_API_KEY,
       },
       params: {},
       returnBody: true,
