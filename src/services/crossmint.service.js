@@ -180,10 +180,10 @@ class CrossmintWalletService {
    * Get wallet token balances
    * @param {string} walletLocator - Wallet address or Crossmint wallet ID
    * @param {string} tokens - Comma-separated list of token symbols (e.g., 'pol,usdt')
-   * @param {string} chains - Optional comma-separated list of chains (e.g., 'polygon-amoy')
+   * @param {string} chains - Optional comma-separated list of chains (e.g., 'polygon,polygon-amoy')
    * @returns {Array} Array of token balances with details
    */
-  async getWalletBalances(walletLocator, tokens = 'pol,usdt', chains = null) {
+  async getWalletBalances(walletLocator, tokens = 'pol,matic,usdt,usdc,dai,weth,wbtc,link,aave,uni', chains = 'polygon,polygon-amoy') {
     if (!this.isInitialized) {
       throw new Error('Crossmint service not initialized. Call initialize() first.');
     }
