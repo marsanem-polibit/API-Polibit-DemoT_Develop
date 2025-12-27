@@ -878,12 +878,12 @@ router.put('/:id', authenticate, catchAsync(async (req, res) => {
   }
 
   // Fields that only admins can update
-  const adminOnlyFields = ['kycStatus', 'accreditedInvestor', 'investorType'];
+  const adminOnlyFields = ['kycStatus', 'accreditedInvestor', 'investorType', 'structureId'];
 
   const updateData = {};
   const allowedFields = [
     'email', 'phoneNumber', 'country', 'taxId', 'kycStatus', 'accreditedInvestor',
-    'riskTolerance', 'investmentPreferences', 'investorType',
+    'riskTolerance', 'investmentPreferences', 'investorType', 'structureId',
     // Individual fields
     'fullName', 'dateOfBirth', 'nationality', 'passportNumber',
     'addressLine1', 'addressLine2', 'city', 'state', 'postalCode',
