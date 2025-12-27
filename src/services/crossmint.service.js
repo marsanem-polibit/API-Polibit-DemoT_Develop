@@ -179,19 +179,28 @@ class CrossmintWalletService {
   /**
    * Get wallet token balances
    * @param {string} walletLocator - Wallet address or Crossmint wallet ID
+   * @param {string} tokens - Comma-separated list of token symbols (e.g., 'pol,usdt')
+   * @param {string} chains - Optional comma-separated list of chains (e.g., 'polygon-amoy')
    * @returns {Array} Array of token balances with details
    */
-  async getWalletBalances(walletLocator) {
+  async getWalletBalances(walletLocator, tokens = 'pol,usdt', chains = null) {
     if (!this.isInitialized) {
       throw new Error('Crossmint service not initialized. Call initialize() first.');
     }
 
     try {
       console.log('[Crossmint] Fetching balances for wallet:', walletLocator);
+      console.log('[Crossmint] Tokens:', tokens);
+
+      const params = { tokens };
+      if (chains) {
+        params.chains = chains;
+      }
 
       const response = await axios.get(
-        `${this.baseUrl}/v1-alpha2/wallets/${walletLocator}/balances`,
+        `${this.baseUrl}/2025-06-09/wallets/${walletLocator}/balances`,
         {
+          params,
           headers: {
             'X-API-KEY': this.apiKey,
           },
@@ -201,7 +210,7 @@ class CrossmintWalletService {
       console.log('[Crossmint] ✓ Balances retrieved');
       console.log('[Crossmint] Balances:', JSON.stringify(response.data, null, 2));
 
-      return response.data.balances || response.data || [];
+      return response.data || [];
     } catch (error) {
       console.error('[Crossmint] Failed to fetch balances:', error.response?.data || error.message);
       throw new Error(`Failed to fetch wallet balances: ${error.response?.data?.message || error.message}`);
