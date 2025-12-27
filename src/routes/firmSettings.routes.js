@@ -44,28 +44,18 @@ router.get('/logo', catchAsync(async (_req, res) => {
 
 /**
  * @route   GET /api/firm-settings
- * @desc    Get firm settings for logged-in user
+ * @desc    Get global firm settings
  * @access  Private
  */
 router.get('/', authenticate, catchAsync(async (req, res) => {
-  const userId = req.auth.userId || req.user.id;
+  // Get global settings
+  const settings = await FirmSettings.get();
 
-  // Get settings by user ID
-  let settings = await FirmSettings.findByUserId(userId);
-
-  // If no settings exist for this user, create new ones
   if (!settings) {
-    const defaultSettings = {
-      firmName: 'My Firm',
-      firmDescription: '',
-      firmWebsite: '',
-      firmAddress: '',
-      firmPhone: '',
-      firmEmail: '',
-      userId
-    };
-
-    settings = await FirmSettings.create(defaultSettings);
+    return res.status(404).json({
+      success: false,
+      message: 'No firm settings found. Please contact administrator.'
+    });
   }
 
   res.status(200).json({
@@ -76,7 +66,7 @@ router.get('/', authenticate, catchAsync(async (req, res) => {
 
 /**
  * @route   POST /api/firm-settings
- * @desc    Create firm settings for logged-in user
+ * @desc    Create global firm settings
  * @access  Private (Root, Admin only)
  */
 router.post('/', authenticate, catchAsync(async (req, res) => {
@@ -102,12 +92,12 @@ router.post('/', authenticate, catchAsync(async (req, res) => {
     firmEmail
   } = req.body;
 
-  // Check if settings already exist for this user
-  const existing = await FirmSettings.findByUserId(userId);
+  // Check if global settings already exist
+  const existing = await FirmSettings.get();
   if (existing) {
     return res.status(400).json({
       success: false,
-      message: 'Firm settings already exist for this user. Use PUT to update.'
+      message: 'Firm settings already exist. Use PUT to update.'
     });
   }
 
@@ -119,7 +109,7 @@ router.post('/', authenticate, catchAsync(async (req, res) => {
     firmAddress: firmAddress?.trim() || '',
     firmPhone: firmPhone?.trim() || '',
     firmEmail: firmEmail?.trim() || '',
-    userId
+    userId  // Track who created it
   };
 
   const settings = await FirmSettings.create(settingsData);
@@ -133,7 +123,7 @@ router.post('/', authenticate, catchAsync(async (req, res) => {
 
 /**
  * @route   PUT /api/firm-settings
- * @desc    Update firm settings for logged-in user
+ * @desc    Update global firm settings
  * @access  Private (Root, Admin only)
  * @body    FormData with optional 'firmLogo' file field and other fields
  */
@@ -150,21 +140,14 @@ router.put('/', authenticate, handleFirmLogoUpload, catchAsync(async (req, res) 
 
   const userId = req.auth.userId || req.user.id;
 
-  // Get user's existing settings
-  let existingSettings = await FirmSettings.findByUserId(userId);
+  // Get existing global settings
+  const existingSettings = await FirmSettings.get();
 
-  // If no settings exist, create them first
   if (!existingSettings) {
-    const defaultSettings = {
-      firmName: 'My Firm',
-      firmDescription: '',
-      firmWebsite: '',
-      firmAddress: '',
-      firmPhone: '',
-      firmEmail: '',
-      userId
-    };
-    existingSettings = await FirmSettings.create(defaultSettings);
+    return res.status(404).json({
+      success: false,
+      message: 'No firm settings found. Please create settings first.'
+    });
   }
 
   const updateData = {};
@@ -216,6 +199,9 @@ router.put('/', authenticate, handleFirmLogoUpload, catchAsync(async (req, res) 
 
   validate(Object.keys(updateData).length > 0, 'No valid fields provided for update');
 
+  // Add userId to track who made the update
+  updateData.userId = userId;
+
   // Update using the existing settings ID
   const settings = await FirmSettings.findByIdAndUpdate(existingSettings.id, updateData);
 
@@ -228,7 +214,7 @@ router.put('/', authenticate, handleFirmLogoUpload, catchAsync(async (req, res) 
 
 /**
  * @route   PUT /api/firm-settings/:id
- * @desc    Update firm settings by ID (only if user owns it)
+ * @desc    Update global firm settings by ID
  * @access  Private (Root, Admin only)
  * @body    FormData with optional 'firmLogo' file field and other fields
  */
@@ -246,10 +232,9 @@ router.put('/:id', authenticate, handleFirmLogoUpload, catchAsync(async (req, re
   const userId = req.auth.userId || req.user.id;
   const { id } = req.params;
 
-  // Verify the settings belong to the user
+  // Verify the settings exist
   const existingSettings = await FirmSettings.findById(id);
   validate(existingSettings, 'Firm settings not found');
-  validate(existingSettings.userId === userId, 'Unauthorized: You can only update your own firm settings');
 
   const updateData = {};
   const allowedFields = [
@@ -300,6 +285,9 @@ router.put('/:id', authenticate, handleFirmLogoUpload, catchAsync(async (req, re
 
   validate(Object.keys(updateData).length > 0, 'No valid fields provided for update');
 
+  // Add userId to track who made the update
+  updateData.userId = userId;
+
   const settings = await FirmSettings.findByIdAndUpdate(id, updateData);
 
   res.status(200).json({
@@ -311,7 +299,7 @@ router.put('/:id', authenticate, handleFirmLogoUpload, catchAsync(async (req, re
 
 /**
  * @route   DELETE /api/firm-settings
- * @desc    Delete firm settings for logged-in user
+ * @desc    Delete global firm settings
  * @access  Private (Root, Admin only)
  */
 router.delete('/', authenticate, catchAsync(async (req, res) => {
@@ -325,11 +313,9 @@ router.delete('/', authenticate, catchAsync(async (req, res) => {
     });
   }
 
-  const userId = req.auth.userId || req.user.id;
-
-  // Get user's settings
-  const settings = await FirmSettings.findByUserId(userId);
-  validate(settings, 'No firm settings found for this user');
+  // Get global settings
+  const settings = await FirmSettings.get();
+  validate(settings, 'No firm settings found');
 
   // Delete by ID
   await FirmSettings.findByIdAndDelete(settings.id);
