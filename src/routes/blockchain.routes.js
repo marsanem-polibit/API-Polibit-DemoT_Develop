@@ -842,7 +842,7 @@ router.delete('/contract/remove-agent', authenticate, catchAsync(async (req, res
  * @body    { identityAddress: string, userAddress: string, country: string, investorType: number }
  * investorType Options {0: retail, 1: professional, 2: institutional}
  */
-router.post('/contract/register-user', authenticate, requireRole(0), catchAsync(async (req, res) => {
+router.post('/contract/register-user', authenticate, catchAsync(async (req, res) => {
   const { identityAddress, userAddress, country, investorType } = req.body;
 
   validate(identityAddress, 'Identity Contract address is required');
@@ -1356,6 +1356,16 @@ router.get('/contract/:complianceAddress/check-country/:country', authenticate, 
   }];
 
   try {
+    // First, check if there's code at the address
+    const code = await web3.eth.getCode(complianceAddress);
+    if (code === '0x' || code === '0x0') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid contract',
+        message: 'No contract code found at the provided address. Please verify the compliance address.'
+      });
+    }
+
     // Create contract instance
     const contract = new web3.eth.Contract(contractAbi, complianceAddress);
 
@@ -1382,6 +1392,19 @@ router.get('/contract/:complianceAddress/check-country/:country', authenticate, 
         success: false,
         error: 'Contract error',
         message: 'Contract call reverted. The contract may not have an isCountryAllowed() function.'
+      });
+    }
+
+    if (error.message && error.message.includes('Returned values aren\'t valid')) {
+      return res.status(400).json({
+        success: false,
+        error: 'ABI mismatch',
+        message: 'The contract does not have the isCountryAllowed(uint16) function or the ABI does not match. Please verify this is a valid compliance registry contract.',
+        details: {
+          expectedFunction: 'isCountryAllowed(uint16)',
+          providedAddress: complianceAddress,
+          suggestion: 'Verify the contract address is correct and implements the compliance registry interface'
+        }
       });
     }
 
