@@ -25,6 +25,7 @@ const messageRoutes = require('./message.routes');
 
 // Email System routes
 const emailRoutes = require('./email.routes');
+const emailDomainRoutes = require('./emailDomain.routes');
 
 // Payment routes
 const paymentRoutes = require('./payment.routes');
@@ -71,6 +72,7 @@ router.use('/', messageRoutes); // For /api/messages/* routes
 
 // Mount Email System routes
 router.use('/users', emailRoutes); // For /api/users/:userId/email-* routes
+router.use('/email-domains', emailDomainRoutes); // For /api/email-domains/* routes
 
 // Mount Payment routes
 router.use('/payments', paymentRoutes);
@@ -118,6 +120,7 @@ router.get('/', (_req, res) => {
       emailSettings: '/api/users/:userId/email-settings',
       sendEmail: '/api/users/:userId/send-email',
       emailLogs: '/api/users/:userId/email-logs',
+      emailDomains: '/api/email-domains',
       // Payment endpoints
       payments: '/api/payments',
       // Subscription endpoints

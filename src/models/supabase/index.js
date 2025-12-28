@@ -28,6 +28,7 @@ const MessageAttachment = require('./messageAttachment');
 // Email System models
 const EmailSettings = require('./emailSettings');
 const EmailLog = require('./emailLog');
+const EmailDomain = require('./emailDomain');
 
 // MFA System models
 const MFAFactor = require('./mfaFactor');
@@ -76,6 +77,7 @@ module.exports = {
   // Email System models
   EmailSettings,
   EmailLog,
+  EmailDomain,
 
   // MFA System models
   MFAFactor,

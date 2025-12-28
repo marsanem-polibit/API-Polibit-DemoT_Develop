@@ -1,13 +1,53 @@
 /**
  * Email Sender Utility
  * Handles sending emails via Resend
+ *
+ * Priority for "from" email:
+ * 1. Explicit fromEmail parameter passed to sendEmail()
+ * 2. Verified domain configuration from database
+ * 3. RESEND_FROM_EMAIL environment variable (fallback)
  */
 
 const { Resend } = require('resend');
-const { EmailLog } = require('../models/supabase');
+const { EmailLog, EmailDomain } = require('../models/supabase');
 
 // Initialize Resend with API key from environment variable
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Cache for verified domain to avoid repeated DB queries
+let cachedVerifiedDomain = null;
+let cacheExpiry = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get the first verified domain from database (with caching)
+ */
+async function getVerifiedDomainConfig() {
+  const now = Date.now();
+
+  // Return cached value if still valid
+  if (cachedVerifiedDomain !== null && now < cacheExpiry) {
+    return cachedVerifiedDomain;
+  }
+
+  try {
+    const verifiedDomains = await EmailDomain.findVerified();
+    cachedVerifiedDomain = verifiedDomains.length > 0 ? verifiedDomains[0] : null;
+    cacheExpiry = now + CACHE_TTL;
+    return cachedVerifiedDomain;
+  } catch (error) {
+    console.error('Error fetching verified domain:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Clear the domain cache (call this when domain config changes)
+ */
+function clearDomainCache() {
+  cachedVerifiedDomain = null;
+  cacheExpiry = 0;
+}
 
 /**
  * Validate email address format
@@ -81,6 +121,11 @@ async function testConnection(userId, testEmail) {
 
 /**
  * Send email using Resend
+ *
+ * Priority for "from" configuration:
+ * 1. Explicit fromEmail/fromName parameters
+ * 2. Verified domain from database (white-label)
+ * 3. Environment variables (fallback)
  */
 async function sendEmail(userId, emailData) {
   const {
@@ -101,8 +146,25 @@ async function sendEmail(userId, emailData) {
     throw new Error('RESEND_API_KEY environment variable is not configured');
   }
 
-  if (!process.env.RESEND_FROM_EMAIL && !fromEmail) {
-    throw new Error('RESEND_FROM_EMAIL environment variable or fromEmail parameter is required');
+  // Get verified domain config from database
+  const verifiedDomain = await getVerifiedDomainConfig();
+
+  // Determine final "from" values with priority:
+  // 1. Explicit parameter > 2. Database config > 3. Environment variable
+  const finalFromEmail = fromEmail
+    || (verifiedDomain?.fromEmail)
+    || process.env.RESEND_FROM_EMAIL;
+
+  const finalFromName = fromName
+    || (verifiedDomain?.fromName)
+    || null;
+
+  const finalReplyTo = replyTo
+    || (verifiedDomain?.replyToEmail)
+    || null;
+
+  if (!finalFromEmail) {
+    throw new Error('No from email configured. Please configure a verified domain or set RESEND_FROM_EMAIL environment variable.');
   }
 
   // Validate required fields
@@ -139,9 +201,8 @@ async function sendEmail(userId, emailData) {
   }
 
   // Prepare "from" field
-  const finalFromEmail = fromEmail || process.env.RESEND_FROM_EMAIL;
-  const from = fromName
-    ? `${fromName} <${finalFromEmail}>`
+  const from = finalFromName
+    ? `${finalFromName} <${finalFromEmail}>`
     : finalFromEmail;
 
   // Process attachments for Resend format
@@ -170,7 +231,7 @@ async function sendEmail(userId, emailData) {
     text: bodyText || undefined,
     cc: cc && cc.length > 0 ? cc : undefined,
     bcc: bcc && bcc.length > 0 ? bcc : undefined,
-    reply_to: replyTo || undefined,
+    reply_to: finalReplyTo || undefined,
     attachments: processedAttachments
   };
 
@@ -231,5 +292,7 @@ module.exports = {
   sendEmail,
   testConnection,
   isValidEmail,
-  validateEmailAddresses
+  validateEmailAddresses,
+  clearDomainCache,
+  getVerifiedDomainConfig
 };
