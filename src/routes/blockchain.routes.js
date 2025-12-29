@@ -2984,11 +2984,19 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, requireRole([0
     // Save initial record
     const smartContract = await SmartContract.create(contractData);
 
+    console.log('[ERC3643 Deploy] Starting deployment for contract:', smartContract.id);
+    console.log('[ERC3643 Deploy] Deployment service URL:', process.env.DEPLOY_ERC3643_URL || 'https://deployerc3643contract-owsxmo2jdq-uc.a.run.app');
+
     // Deploy contract
     const context = { auth: req.auth };
     const result = await apiManager.deployContractERC3643(context, req.body);
 
+    console.log('[ERC3643 Deploy] Deployment result:', result.error ? 'FAILED' : 'SUCCESS');
+
     if (result.error) {
+      console.error('[ERC3643 Deploy] Error:', result.error);
+      console.error('[ERC3643 Deploy] Error details:', result.body);
+
       // Mark as failed
       await SmartContract.markAsFailed(smartContract.id, result.error);
 
@@ -3003,6 +3011,8 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, requireRole([0
     // Update with deployment result
     await SmartContract.markAsDeployed(smartContract.id, result.body);
 
+    console.log('[ERC3643 Deploy] Contract deployed successfully:', smartContract.id);
+
     res.status(result.statusCode || 200).json({
       success: true,
       message: 'ERC3643 contract deployment initiated',
@@ -3011,6 +3021,7 @@ router.post('/deploy/erc3643', requireApiKey, requireBearerToken, requireRole([0
       data: result.body,
     });
   } catch (error) {
+    console.error('[ERC3643 Deploy] Exception:', error.message);
     // Error occurred during creation or deployment - no need to mark as failed
     // since the record may not have been created yet
     throw error;

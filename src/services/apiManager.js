@@ -1244,6 +1244,7 @@ console.log('****** BODY:', body);
       params,
       returnBody: true,
       isStreamingApi: false,
+      timeout: 180000, // 3 minutes timeout for blockchain deployment
     });
   }
 }
