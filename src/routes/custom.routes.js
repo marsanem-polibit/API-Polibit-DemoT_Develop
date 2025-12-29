@@ -1829,6 +1829,57 @@ router.get('/wallet/balances', authenticate, catchAsync(async (req, res) => {
  * @desc    Health check for Custom API routes
  * @access  Public
  */
+/**
+ * Diagnostic endpoint to check Supabase configuration
+ */
+router.get('/diagnostic/supabase', catchAsync(async (req, res) => {
+  const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const hasAnonKey = !!process.env.SUPABASE_ANON_KEY;
+  const keyType = hasServiceKey ? 'service_role' : (hasAnonKey ? 'anon' : 'none');
+
+  // Try to query users table
+  const supabase = getSupabase();
+  let canQueryUsers = false;
+  let userCount = null;
+  let queryError = null;
+
+  try {
+    const { data, error, count } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      queryError = {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      };
+    } else {
+      canQueryUsers = true;
+      userCount = count;
+    }
+  } catch (error) {
+    queryError = error.message;
+  }
+
+  res.json({
+    success: true,
+    supabase: {
+      url: process.env.SUPABASE_URL,
+      keyType: keyType,
+      hasServiceRoleKey: hasServiceKey,
+      hasAnonKey: hasAnonKey
+    },
+    database: {
+      canQueryUsers,
+      userCount,
+      error: queryError
+    },
+    timestamp: new Date().toISOString()
+  });
+}));
+
 router.get('/health', (req, res) => {
   res.json({
     service: 'Custom APIs',
