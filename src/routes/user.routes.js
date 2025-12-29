@@ -1012,6 +1012,67 @@ router.get('/filter', authenticate, catchAsync(async (req, res) => {
 }));
 
 /**
+ * @route   GET /api/users/investors
+ * @desc    Get all users with role=3 (investors) with their payment data
+ * @access  Private (requires authentication, Root/Admin/Support only)
+ */
+router.get('/investors', authenticate, catchAsync(async (req, res) => {
+  const { userRole } = getUserContext(req);
+
+  // Only ROOT, ADMIN, and STAFF can access this endpoint
+  validate(
+    userRole === ROLES.ROOT || userRole === ROLES.ADMIN || userRole === ROLES.STAFF || userRole === ROLES.GUEST,
+    'Access denied. Only investment manager users can access this endpoint.'
+  );
+
+  // Get all users with role=3 (investors)
+  const allUsers = await User.find({});
+  const investors = allUsers.filter(user => user.role === 3);
+
+  // Get payments for all investors
+  const Payment = require('../models/supabase/payment');
+  const allPayments = await Payment.find({});
+
+  // Map investors with their payment data
+  const investorsWithPayments = investors.map(user => {
+    // Get payments for this user
+    const userPayments = allPayments.filter(payment =>
+      payment.userId === user.id ||
+      (payment.email && payment.email.toLowerCase() === user.email?.toLowerCase())
+    );
+
+    // Check if user has pending payments
+    const hasPendingPayments = userPayments.some(payment => payment.status === 'pending');
+
+    return {
+      id: user.id,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      country: user.country,
+      kycStatus: user.kycStatus || 'Not Started',
+      walletAddress: user.walletAddress,
+      investorType: user.investorType || 'Individual',
+      isActive: user.isActive !== false, // Default to true if not set
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt,
+      // Payment data
+      hasPendingPayments,
+      paymentsCount: userPayments.length,
+      pendingPaymentsCount: userPayments.filter(p => p.status === 'pending').length,
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    count: investorsWithPayments.length,
+    data: investorsWithPayments
+  });
+}));
+
+/**
  * @route   GET /api/users/:id
  * @desc    Get single user by ID
  * @access  Private (requires authentication, Root/Admin/Staff can access any user, Investor can access only their own)
