@@ -3,6 +3,7 @@
  * Endpoints for managing structure investment payment data
  */
 const express = require('express');
+const crypto = require('crypto');
 const { authenticate } = require('../middleware/auth');
 const { catchAsync, validate } = require('../middleware/errorHandler');
 const { handleDocumentUpload } = require('../middleware/upload');
@@ -108,11 +109,14 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
   validate(structureId, 'Structure ID is required');
   validate(contractId, 'Contract ID is required');
 
+  // Generate submission ID if not provided
+  const finalSubmissionId = submissionId?.trim() || `PAY-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
   let paymentImageUrl = null;
 
   // If file is uploaded, save it to Supabase Storage
   if (req.file) {
-    const folder = submissionId ? `payments/${submissionId}` : `payments/${email}`;
+    const folder = `payments/${finalSubmissionId}`;
     const uploadResult = await uploadToSupabase(
       req.file.buffer,
       req.file.originalname,
@@ -128,7 +132,7 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
   // Create payment data
   const paymentData = {
     email: email.trim().toLowerCase(),
-    submissionId: submissionId?.trim() || null,
+    submissionId: finalSubmissionId,
     paymentImage: paymentImageUrl,
     paymentTransactionHash: paymentTransactionHash?.trim() || null,
     mintTransactionHash: mintTransactionHash?.trim() || null,
