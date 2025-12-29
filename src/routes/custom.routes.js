@@ -1116,6 +1116,9 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
     // Get user's Próspera profile including RPN
     const userProfile = await prospera.getUserProfile(prosperapData.accessToken);
 
+    // DEBUG: Log full profile to see all available fields (country, entity type, etc.)
+    console.log('[Prospera Callback] Full user profile:', JSON.stringify(userProfile, null, 2));
+
     // Extract RPN from profile (field name may vary - adjust based on actual API response)
     const rpn = userProfile.rpn || userProfile.resident_permit_number || userProfile.residentPermitNumber;
 
@@ -1193,7 +1196,17 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
         name: prosperapData.user.name,
         prosperaId: prosperapData.user.prosperaId,
         picture: prosperapData.user.picture,
-        emailVerified: prosperapData.user.emailVerified
+        emailVerified: prosperapData.user.emailVerified,
+        // Include Prospera profile data for registration
+        givenName: userProfile.givenName,
+        surname: userProfile.surname,
+        countryOfBirth: userProfile.countryOfBirth,
+        citizenships: userProfile.citizenships,
+        dateOfBirth: userProfile.dateOfBirth,
+        sex: userProfile.sex,
+        phoneNumber: userProfile.phoneNumber,
+        address: userProfile.address,
+        entityType: 'individual', // natural-person endpoint = individual
       },
       // Store these securely for the completion step
       sessionData: {
@@ -1357,12 +1370,17 @@ router.post('/prospera/complete-registration', catchAsync(async (req, res) => {
   // Create new investor user
   console.log('[Prospera Registration] Creating new user...');
 
-  const [firstName, ...lastNameParts] = (userData.name || 'Prospera User').split(' ');
+  // Use Prospera profile data for names (more accurate than splitting full name)
+  const firstName = userData.givenName || (userData.name || 'Prospera User').split(' ')[0];
+  const lastName = userData.surname || (userData.name || '').split(' ').slice(1).join(' ');
+
+  // Determine country: prefer address.country, fallback to countryOfBirth
+  const country = userData.address?.country || userData.countryOfBirth || null;
 
   user = await User.create({
     email: userData.email,
     firstName: firstName || '',
-    lastName: lastNameParts.join(' ') || '',
+    lastName: lastName || '',
     profileImage: userData.picture,
     role: 3, // Investor role (ROLES.INVESTOR)
     prosperaId: userData.prosperaId,
@@ -1371,6 +1389,19 @@ router.post('/prospera/complete-registration', catchAsync(async (req, res) => {
     isEmailVerified: userData.emailVerified || false,
     appLanguage: 'en',
     lastLogin: new Date(),
+    // New fields from Prospera profile
+    phoneNumber: userData.phoneNumber || null,
+    country: country,
+    countryOfBirth: userData.countryOfBirth || null,
+    citizenships: userData.citizenships || [],
+    dateOfBirth: userData.dateOfBirth || null,
+    sex: userData.sex || null,
+    addressLine1: userData.address?.line1 || null,
+    addressLine2: userData.address?.line2 || null,
+    city: userData.address?.city || null,
+    state: userData.address?.state || null,
+    postalCode: userData.address?.postalCode || null,
+    entityType: userData.entityType || 'individual',
   });
 
   console.log('[Prospera Registration] ✓ New user created:', user.id);

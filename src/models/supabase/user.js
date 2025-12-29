@@ -99,6 +99,11 @@ class User {
       date_of_birth: userData.dateOfBirth || null,
       nationality: userData.nationality || null,
       passport_number: userData.passportNumber || null,
+      // Prospera profile fields
+      country_of_birth: userData.countryOfBirth || null,
+      citizenships: userData.citizenships || null,
+      sex: userData.sex || null,
+      entity_type: userData.entityType || 'individual',
       // Institution investor fields
       institution_name: userData.institutionName || null,
       institution_type: userData.institutionType || null,
@@ -765,6 +770,11 @@ class User {
       dateOfBirth: dbUser.date_of_birth,
       nationality: dbUser.nationality,
       passportNumber: dbUser.passport_number,
+      // Prospera profile fields
+      countryOfBirth: dbUser.country_of_birth,
+      citizenships: dbUser.citizenships,
+      sex: dbUser.sex,
+      entityType: dbUser.entity_type,
       // Institution investor fields
       institutionName: dbUser.institution_name,
       institutionType: dbUser.institution_type,
@@ -847,6 +857,11 @@ class User {
       dateOfBirth: 'date_of_birth',
       nationality: 'nationality',
       passportNumber: 'passport_number',
+      // Prospera profile fields
+      countryOfBirth: 'country_of_birth',
+      citizenships: 'citizenships',
+      sex: 'sex',
+      entityType: 'entity_type',
       // Institution investor fields
       institutionName: 'institution_name',
       institutionType: 'institution_type',
