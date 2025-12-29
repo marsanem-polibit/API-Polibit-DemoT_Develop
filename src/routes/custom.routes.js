@@ -169,9 +169,15 @@ router.post('/login', catchAsync(async (req, res) => {
   // Validate required fields
   validate({email, password}, 'email and password are required to login');
 
-  // Authenticate with Supabase Auth
-  const supabase = getSupabase();
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+  // Create a dedicated admin client for auth that won't affect DB queries
+  const { createClient } = require('@supabase/supabase-js');
+  const authClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY  // Use anon key for auth
+  );
+
+  // Authenticate with Supabase Auth using dedicated client
+  const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
     email,
     password
   });
@@ -188,10 +194,13 @@ router.post('/login', catchAsync(async (req, res) => {
   // Check if user exists in users table
   console.log('[Login] Authenticated user ID:', authData.user.id, 'Email:', authData.user.email);
 
+  // Use service role client for DB queries (bypasses RLS)
+  const serviceSupabase = getSupabase();
+
   // Debug: Try to query directly (without .single() to see all results)
   let directQuery = null;
   try {
-    const { data, error, count } = await supabase
+    const { data, error, count } = await serviceSupabase
       .from('users')
       .select('*', { count: 'exact' })
       .eq('id', authData.user.id);
