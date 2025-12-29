@@ -188,18 +188,26 @@ router.post('/login', catchAsync(async (req, res) => {
   // Check if user exists in users table
   console.log('[Login] Authenticated user ID:', authData.user.id, 'Email:', authData.user.email);
 
-  // Debug: Try to query directly
+  // Debug: Try to query directly (without .single() to see all results)
   let directQuery = null;
   try {
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from('users')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single();
-    directQuery = { found: !!data, error: error?.message };
+      .select('*', { count: 'exact' })
+      .eq('id', authData.user.id);
+
+    directQuery = {
+      found: data && data.length > 0,
+      count: data?.length || 0,
+      error: error?.message
+    };
     console.log('[Login] Direct query result:', directQuery);
+    if (data && data.length > 0) {
+      console.log('[Login] Found users:', data.map(u => ({ id: u.id, email: u.email })));
+    }
   } catch (e) {
     console.error('[Login] Direct query error:', e);
+    directQuery = { found: false, error: e.message };
   }
 
   const user = await User.findById(authData.user.id);
@@ -220,6 +228,7 @@ router.post('/login', catchAsync(async (req, res) => {
         email: authData.user.email,
         hint: 'User exists in Supabase Auth but not in users table',
         directQueryWorked: directQuery?.found,
+        directQueryCount: directQuery?.count,
         directQueryError: directQuery?.error
       } : undefined
     });
