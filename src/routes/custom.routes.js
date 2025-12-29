@@ -1258,6 +1258,26 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
     });
   }
 
+  // Check if user has MFA enabled
+  if (user.mfaFactorId) {
+    console.log('[Prospera Callback] MFA required for user:', user.email);
+    return res.status(200).json({
+      success: true,
+      mfaRequired: true,
+      message: 'MFA verification required.',
+      factorId: user.mfaFactorId,
+      // Include user info needed for MFA verification
+      userId: user.id,
+      userEmail: user.email,
+      // Include Prospera tokens for after MFA verification
+      prospera: {
+        accessToken: prosperapData.accessToken,
+        refreshToken: prosperapData.refreshToken,
+        expiresAt: prosperapData.expiresAt,
+      },
+    });
+  }
+
   // Create JWT token (same format as regular login)
   const token = createToken({
     id: user.id,
