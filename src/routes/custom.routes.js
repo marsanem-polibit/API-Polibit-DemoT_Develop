@@ -1110,11 +1110,12 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
   console.log('[Prospera Callback] User email:', prosperapData.user.email);
 
   // Verify user is an active Próspera resident
+  let userProfile = null; // Declare outside try block so it's accessible later
   try {
     console.log('[Prospera Callback] Fetching user profile to get RPN...');
 
     // Get user's Próspera profile including RPN
-    const userProfile = await prospera.getUserProfile(prosperapData.accessToken);
+    userProfile = await prospera.getUserProfile(prosperapData.accessToken);
 
     // DEBUG: Log full profile to see all available fields (country, entity type, etc.)
     console.log('[Prospera Callback] Full user profile:', JSON.stringify(userProfile, null, 2));
