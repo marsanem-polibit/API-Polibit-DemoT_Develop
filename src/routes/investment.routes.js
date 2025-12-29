@@ -76,7 +76,10 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
 
   // Validate type-specific fields
   if (investmentType === 'EQUITY' || investmentType === 'MIXED') {
-    validate(equityInvested !== undefined && equityInvested > 0, 'Equity invested amount is required');
+    // Validate equity invested if provided
+    if (equityInvested !== undefined && equityInvested !== null) {
+      validate(equityInvested > 0, 'Equity invested amount must be greater than 0');
+    }
 
     // Validate ownership percentage (if provided)
     const ownershipPct = ownershipPercentage || equityOwnershipPercent;
