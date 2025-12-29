@@ -78,6 +78,7 @@ router.post('/', authenticate, requireInvestmentManagerAccess, catchAsync(async 
   if (investmentType === 'EQUITY' || investmentType === 'MIXED') {
     // Validate equity invested if provided
     if (equityInvested !== undefined && equityInvested !== null) {
+      validate(typeof equityInvested === 'number' && !isNaN(equityInvested), 'Equity invested must be a valid number');
       validate(equityInvested > 0, 'Equity invested amount must be greater than 0');
     }
 
