@@ -104,7 +104,6 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
 
   // Validate required fields
   validate(email, 'Email is required');
-  validate(submissionId, 'Submission ID is required');
   validate(amount, 'Amount is required');
   validate(structureId, 'Structure ID is required');
   validate(contractId, 'Contract ID is required');
@@ -113,7 +112,7 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
 
   // If file is uploaded, save it to Supabase Storage
   if (req.file) {
-    const folder = `payments/${submissionId}`;
+    const folder = submissionId ? `payments/${submissionId}` : `payments/${email}`;
     const uploadResult = await uploadToSupabase(
       req.file.buffer,
       req.file.originalname,
@@ -129,7 +128,7 @@ router.post('/', authenticate, handleDocumentUpload, catchAsync(async (req, res)
   // Create payment data
   const paymentData = {
     email: email.trim().toLowerCase(),
-    submissionId: submissionId.trim(),
+    submissionId: submissionId?.trim() || null,
     paymentImage: paymentImageUrl,
     paymentTransactionHash: paymentTransactionHash?.trim() || null,
     mintTransactionHash: mintTransactionHash?.trim() || null,
