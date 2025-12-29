@@ -54,7 +54,15 @@ const getSupabase = () => {
     // Auto-initialize for serverless environments
     const supabaseUrl = process.env.SUPABASE_URL;
     // Use service role key for backend operations to bypass RLS
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = serviceRoleKey || anonKey;
+
+    // Debug logging to identify which key is being used
+    const keyType = serviceRoleKey ? 'SERVICE_ROLE' : (anonKey ? 'ANON' : 'NONE');
+    console.log(`[Supabase] Key type being used: ${keyType}`);
+    console.log(`[Supabase] SERVICE_ROLE_KEY present: ${!!serviceRoleKey}`);
+    console.log(`[Supabase] Key starts with: ${supabaseKey?.substring(0, 20)}...`);
 
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Missing Supabase credentials. Please check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
