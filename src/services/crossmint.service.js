@@ -218,6 +218,97 @@ class CrossmintWalletService {
   }
 
   /**
+   * Transfer tokens to another wallet
+   * @param {string} walletLocator - Source wallet address
+   * @param {string} tokenLocator - Token identifier (e.g., 'polygon-amoy:0x...' or 'polygon-amoy:pol')
+   * @param {string} recipient - Destination wallet address
+   * @param {string} amount - Amount to transfer as decimal string
+   * @returns {Object} Transfer transaction details
+   */
+  async transferToken(walletLocator, tokenLocator, recipient, amount) {
+    if (!this.isInitialized) {
+      throw new Error('Crossmint service not initialized. Call initialize() first.');
+    }
+
+    try {
+      console.log('[Crossmint] Initiating transfer...');
+      console.log('[Crossmint] From wallet:', walletLocator);
+      console.log('[Crossmint] Token:', tokenLocator);
+      console.log('[Crossmint] To:', recipient);
+      console.log('[Crossmint] Amount:', amount);
+
+      const response = await axios.post(
+        `${this.baseUrl}/2025-06-09/wallets/${walletLocator}/tokens/${tokenLocator}/transfers`,
+        {
+          recipient: recipient,
+          amount: amount.toString(),
+        },
+        {
+          headers: {
+            'X-API-KEY': this.apiKey,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('[Crossmint] ✓ Transfer initiated successfully');
+      console.log('[Crossmint] Transfer response:', JSON.stringify(response.data, null, 2));
+
+      return {
+        success: true,
+        id: response.data.id,
+        status: response.data.status,
+        onChain: response.data.onChain || null,
+        createdAt: response.data.createdAt,
+      };
+    } catch (error) {
+      console.error('[Crossmint] Transfer failed:', error.response?.data || error.message);
+
+      const errorMessage = error.response?.data?.message
+        || error.response?.data?.error
+        || error.message
+        || 'Transfer failed';
+
+      throw new Error(`Failed to transfer tokens: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get transfer status
+   * @param {string} walletLocator - Wallet address
+   * @param {string} tokenLocator - Token identifier
+   * @param {string} transferId - Transfer ID
+   * @returns {Object} Transfer status details
+   */
+  async getTransferStatus(walletLocator, tokenLocator, transferId) {
+    if (!this.isInitialized) {
+      throw new Error('Crossmint service not initialized. Call initialize() first.');
+    }
+
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/2025-06-09/wallets/${walletLocator}/tokens/${tokenLocator}/transfers/${transferId}`,
+        {
+          headers: {
+            'X-API-KEY': this.apiKey,
+          },
+        }
+      );
+
+      return {
+        id: response.data.id,
+        status: response.data.status,
+        onChain: response.data.onChain || null,
+        createdAt: response.data.createdAt,
+        completedAt: response.data.completedAt,
+      };
+    } catch (error) {
+      console.error('[Crossmint] Get transfer status failed:', error.response?.data || error.message);
+      throw new Error(`Failed to get transfer status: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  /**
    * Get wallet NFTs
    * @param {string} walletId - Crossmint wallet ID
    * @returns {Array} Array of NFTs

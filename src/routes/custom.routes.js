@@ -301,7 +301,9 @@ router.post('/login', catchAsync(async (req, res) => {
       kycUrl: user.kycUrl,
       address: user.address,
       country: user.country,
-      walletAddress: user.walletAddress || null
+      walletAddress: user.walletAddress || null,
+      mfaEnabled: !!user.mfaFactorId,
+      mfaFactorId: user.mfaFactorId || null
     }
   });
 }));
@@ -432,7 +434,9 @@ router.post('/mfa/login-verify', catchAsync(async (req, res) => {
         kycUrl: user.kycUrl,
         address: user.address,
         country: user.country,
-        walletAddress: user.walletAddress || null
+        walletAddress: user.walletAddress || null,
+        mfaEnabled: !!user.mfaFactorId,
+        mfaFactorId: user.mfaFactorId || null
       }
     });
   } catch (error) {
@@ -1519,6 +1523,8 @@ router.post('/prospera/callback', catchAsync(async (req, res) => {
       address: user.addressLine1,
       country: user.country,
       walletAddress: user.walletAddress,
+      mfaEnabled: !!user.mfaFactorId,
+      mfaFactorId: user.mfaFactorId || null
     }
   });
 }));
@@ -1692,6 +1698,8 @@ router.post('/prospera/complete-registration', catchAsync(async (req, res) => {
       address: user.addressLine1,
       country: user.country,
       walletAddress: user.walletAddress,
+      mfaEnabled: false,
+      mfaFactorId: null
     }
   });
 }));
@@ -1891,6 +1899,229 @@ router.get('/wallet/balances', authenticate, catchAsync(async (req, res) => {
       queriedTokens: allTokens
     }
   });
+}));
+
+/**
+ * @route   POST /api/custom/wallet/transfer
+ * @desc    Transfer tokens from user's wallet to another address (requires MFA)
+ * @access  Private
+ */
+router.post('/wallet/transfer', authenticate, catchAsync(async (req, res) => {
+  const { tokenLocator, recipient, amount, mfaCode } = req.body;
+  const supabase = getSupabase();
+
+  // Ensure Crossmint is initialized
+  await ensureCrossmintInitialized();
+
+  // Get user
+  const user = await User.findById(req.auth.userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  // Check user has a wallet
+  if (!user.walletAddress) {
+    return res.status(400).json({
+      success: false,
+      message: 'No wallet found for user'
+    });
+  }
+
+  // Check user has MFA enabled
+  if (!user.mfaFactorId) {
+    return res.status(403).json({
+      success: false,
+      message: 'MFA must be enabled to transfer tokens. Please enable MFA in Security Settings.',
+      mfaRequired: true
+    });
+  }
+
+  // Validate required fields
+  if (!tokenLocator || !recipient || !amount || !mfaCode) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required fields: tokenLocator, recipient, amount, mfaCode'
+    });
+  }
+
+  // Validate recipient address format (basic EVM address check)
+  const evmAddressRegex = /^0x[a-fA-F0-9]{40}$/;
+  if (!evmAddressRegex.test(recipient)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid recipient address format'
+    });
+  }
+
+  // Validate amount is a positive number
+  const amountNum = parseFloat(amount);
+  if (isNaN(amountNum) || amountNum <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Amount must be a positive number'
+    });
+  }
+
+  // Prevent sending to self
+  if (recipient.toLowerCase() === user.walletAddress.toLowerCase()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot transfer to your own wallet'
+    });
+  }
+
+  // Verify MFA code
+  console.log('[Wallet Transfer] Verifying MFA for user:', user.email);
+
+  try {
+    // Create MFA challenge
+    const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+      factorId: user.mfaFactorId
+    });
+
+    if (challengeError) {
+      console.error('[Wallet Transfer] MFA challenge error:', challengeError.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to create MFA challenge'
+      });
+    }
+
+    // Verify MFA code
+    const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
+      factorId: user.mfaFactorId,
+      challengeId: challengeData.id,
+      code: mfaCode
+    });
+
+    if (verifyError) {
+      console.error('[Wallet Transfer] MFA verification failed:', verifyError.message);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid MFA code. Please try again.'
+      });
+    }
+
+    console.log('[Wallet Transfer] ✓ MFA verified successfully');
+
+  } catch (mfaError) {
+    console.error('[Wallet Transfer] MFA error:', mfaError.message);
+    return res.status(500).json({
+      success: false,
+      message: 'MFA verification failed'
+    });
+  }
+
+  // Execute transfer via Crossmint
+  console.log('[Wallet Transfer] Initiating transfer...');
+  console.log('[Wallet Transfer] From:', user.walletAddress);
+  console.log('[Wallet Transfer] To:', recipient);
+  console.log('[Wallet Transfer] Token:', tokenLocator);
+  console.log('[Wallet Transfer] Amount:', amount);
+
+  try {
+    const transferResult = await crossmint.transferToken(
+      user.walletAddress,
+      tokenLocator,
+      recipient,
+      amount
+    );
+
+    console.log('[Wallet Transfer] ✓ Transfer initiated:', transferResult.id);
+
+    // Log transfer for audit trail
+    console.log('[Wallet Transfer] Audit Log:', JSON.stringify({
+      userId: user.id,
+      userEmail: user.email,
+      fromWallet: user.walletAddress,
+      toWallet: recipient,
+      tokenLocator,
+      amount,
+      transferId: transferResult.id,
+      status: transferResult.status,
+      timestamp: new Date().toISOString()
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Transfer initiated successfully',
+      data: {
+        transferId: transferResult.id,
+        status: transferResult.status,
+        from: user.walletAddress,
+        to: recipient,
+        token: tokenLocator,
+        amount: amount,
+        onChain: transferResult.onChain
+      }
+    });
+
+  } catch (transferError) {
+    console.error('[Wallet Transfer] Transfer failed:', transferError.message);
+    res.status(500).json({
+      success: false,
+      message: transferError.message || 'Transfer failed'
+    });
+  }
+}));
+
+/**
+ * @route   GET /api/custom/wallet/transfer/:transferId
+ * @desc    Get transfer status
+ * @access  Private
+ */
+router.get('/wallet/transfer/:transferId', authenticate, catchAsync(async (req, res) => {
+  const { transferId } = req.params;
+  const { tokenLocator } = req.query;
+
+  // Ensure Crossmint is initialized
+  await ensureCrossmintInitialized();
+
+  // Get user
+  const user = await User.findById(req.auth.userId);
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+
+  if (!user.walletAddress) {
+    return res.status(400).json({
+      success: false,
+      message: 'No wallet found for user'
+    });
+  }
+
+  if (!tokenLocator) {
+    return res.status(400).json({
+      success: false,
+      message: 'tokenLocator query parameter is required'
+    });
+  }
+
+  try {
+    const status = await crossmint.getTransferStatus(
+      user.walletAddress,
+      tokenLocator,
+      transferId
+    );
+
+    res.status(200).json({
+      success: true,
+      data: status
+    });
+
+  } catch (error) {
+    console.error('[Wallet Transfer] Get status failed:', error.message);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get transfer status'
+    });
+  }
 }));
 
 /**
