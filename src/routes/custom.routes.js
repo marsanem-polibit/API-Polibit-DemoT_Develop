@@ -167,12 +167,30 @@ router.post('/login', catchAsync(async (req, res) => {
 
   // Check if user exists in users table
   console.log('[Login] Authenticated user ID:', authData.user.id, 'Email:', authData.user.email);
+
+  // Debug: Try to query directly
+  let directQuery = null;
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+    directQuery = { found: !!data, error: error?.message };
+    console.log('[Login] Direct query result:', directQuery);
+  } catch (e) {
+    console.error('[Login] Direct query error:', e);
+  }
+
   const user = await User.findById(authData.user.id);
+  console.log('[Login] User.findById result:', user ? 'found' : 'not found');
+
   if (!user) {
     console.error('[Login] User exists in Auth but not in users table:', {
       authUserId: authData.user.id,
       email: authData.user.email,
-      createdAt: authData.user.created_at
+      createdAt: authData.user.created_at,
+      directQueryWorked: directQuery?.found
     });
     return res.status(404).json({
       success: false,
@@ -180,7 +198,9 @@ router.post('/login', catchAsync(async (req, res) => {
       debug: process.env.NODE_ENV === 'development' ? {
         authUserId: authData.user.id,
         email: authData.user.email,
-        hint: 'User exists in Supabase Auth but not in users table'
+        hint: 'User exists in Supabase Auth but not in users table',
+        directQueryWorked: directQuery?.found,
+        directQueryError: directQuery?.error
       } : undefined
     });
   }
