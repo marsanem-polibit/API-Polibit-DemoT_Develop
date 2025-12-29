@@ -1847,8 +1847,8 @@ router.get('/diagnostic/user/:email', catchAsync(async (req, res) => {
   const { email } = req.params;
   const supabase = getSupabase();
 
-  // Check in users table
-  const user = await User.findByEmail(email);
+  // Check in users table by email
+  const userByEmail = await User.findByEmail(email);
 
   // Check in Supabase Auth (admin only)
   let authUser = null;
@@ -1864,26 +1864,42 @@ router.get('/diagnostic/user/:email', catchAsync(async (req, res) => {
     authError = error.message;
   }
 
+  // If we found the auth user, also try finding by ID (like login does)
+  let userById = null;
+  if (authUser) {
+    userById = await User.findById(authUser.id);
+  }
+
   res.json({
     success: true,
     email: email,
-    existsInUsersTable: !!user,
+    existsInUsersTable: !!userByEmail,
     existsInAuth: !!authUser,
-    userTableData: user ? {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      isActive: user.isActive
-    } : null,
+    userTableData: {
+      byEmail: userByEmail ? {
+        id: userByEmail.id,
+        email: userByEmail.email,
+        role: userByEmail.role,
+        isActive: userByEmail.isActive
+      } : null,
+      byId: userById ? {
+        id: userById.id,
+        email: userById.email,
+        role: userById.role,
+        isActive: userById.isActive
+      } : null,
+      idsMatch: userByEmail && userById ? userByEmail.id === userById.id : null
+    },
     authData: authUser ? {
       id: authUser.id,
       email: authUser.email,
       createdAt: authUser.created_at
     } : null,
     authError: authError,
-    diagnosis: !user && authUser ? 'User exists in Auth but missing from users table - THIS IS THE PROBLEM' :
-               user && !authUser ? 'User exists in table but missing from Auth' :
-               user && authUser ? 'User exists in both - should work fine' :
+    diagnosis: !userByEmail && authUser ? 'User exists in Auth but missing from users table - THIS IS THE PROBLEM' :
+               userByEmail && !authUser ? 'User exists in table but missing from Auth' :
+               userByEmail && authUser && !userById ? 'User found by email but NOT by ID - ID MISMATCH ISSUE' :
+               userByEmail && authUser && userById ? 'User exists in both and findById works - should work fine' :
                'User does not exist in either system',
     timestamp: new Date().toISOString()
   });
