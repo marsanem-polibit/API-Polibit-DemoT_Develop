@@ -116,6 +116,7 @@ class MockSupabaseQuery {
     const result = {
       data: this.mockData,
       error: this.mockError,
+      count: this.mockCount,
     };
     return Promise.resolve(callback(result));
   }
@@ -135,6 +136,7 @@ class MockSupabaseClient {
     if (mockConfig) {
       query.mockData = mockConfig.data;
       query.mockError = mockConfig.error;
+      query.mockCount = mockConfig.count;
     }
 
     return query;
@@ -172,6 +174,38 @@ class MockSupabaseClient {
       data: { session: null },
       error: null,
     }),
+    admin: {
+      createUser: jest.fn().mockResolvedValue({
+        data: { user: null },
+        error: null,
+      }),
+      listUsers: jest.fn().mockResolvedValue({
+        data: { users: [] },
+        error: null,
+      }),
+    },
+    mfa: {
+      challenge: jest.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+      verify: jest.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+      enroll: jest.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+      unenroll: jest.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      }),
+    },
+    setSession: jest.fn().mockResolvedValue({
+      data: { session: null },
+      error: null,
+    }),
   };
 
   // Storage methods
@@ -185,8 +219,8 @@ class MockSupabaseClient {
   };
 
   // Helper to set mock responses for tables
-  setMockResponse(table, { data = null, error = null }) {
-    this.mockResponses.set(table, { data, error });
+  setMockResponse(table, { data = null, error = null, count = undefined }) {
+    this.mockResponses.set(table, { data, error, count });
   }
 
   // Helper to set mock RPC responses
